@@ -1,7 +1,49 @@
 // Product helper functions that don't import the Product interface directly
 // This avoids the runtime import issue
 
-import type { ManufacturingMethod, ProductState } from '../types/manufacturing';
+import { ManufacturingMethod, ProductState, TagCategory, TagRequirement } from '../types';
+import { upgradeManufacturingMethod } from '../utils/upgradeManufacturingSteps';
+
+// Helper to create basic tag requirements for simple operations
+function createBasicTags(manipulation: number = 5, surface: number = 1): TagRequirement[] {
+  return [
+    {
+      category: TagCategory.BASIC_MANIPULATION,
+      minimum: manipulation,
+      optimal: manipulation * 2,
+      consumes: manipulation
+    },
+    {
+      category: TagCategory.SURFACE,
+      minimum: surface,
+      optimal: surface * 2,
+      consumes: surface
+    }
+  ];
+}
+
+function createMachiningTags(machining: TagCategory, value: number = 10, surface: number = 2): TagRequirement[] {
+  return [
+    {
+      category: machining,
+      minimum: value,
+      optimal: value * 2,
+      consumes: value
+    },
+    {
+      category: TagCategory.SURFACE,
+      minimum: surface,
+      optimal: surface * 2,
+      consumes: surface
+    },
+    {
+      category: TagCategory.BASIC_MANIPULATION,
+      minimum: 5,
+      optimal: 10,
+      consumes: 5
+    }
+  ];
+}
 
 // Define a minimal product interface for runtime use
 export interface ProductData {
@@ -281,7 +323,18 @@ export const productData: Record<string, ProductData> = {
 
 // Helper functions that can be safely imported by gameStore
 export function getProductData(productId: string): ProductData | undefined {
-  return productData[productId];
+  const product = productData[productId];
+  if (!product) return undefined;
+  
+  // Upgrade manufacturing methods to include required_tags if missing
+  if (product.manufacturing_methods) {
+    return {
+      ...product,
+      manufacturing_methods: product.manufacturing_methods.map(upgradeManufacturingMethod)
+    };
+  }
+  
+  return product;
 }
 
 export function getAllProductIds(): string[] {

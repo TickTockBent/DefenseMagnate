@@ -1,8 +1,9 @@
-import { useGameStore } from '../state/gameStore'
+import { useGameStore } from '../state/gameStoreWithEquipment'
 import { ResearchContent } from './ResearchContent'
-import { ManufacturingContent } from './ManufacturingContent'
+import { ManufacturingContentEnhanced } from './ManufacturingContentEnhanced'
 import { ContractsContent } from './ContractsContent'
 import { SupplyContent } from './SupplyContent'
+import { EquipmentPanelSimple } from './EquipmentPanelSimple'
 
 export function ContentPanel() {
   const activeTab = useGameStore((state) => state.activeTab)
@@ -12,7 +13,9 @@ export function ContentPanel() {
       case 'research':
         return <ResearchContent />
       case 'manufacturing':
-        return <ManufacturingContent />
+        return <ManufacturingContentEnhanced />
+      case 'equipment':
+        return <EquipmentPanelSimple />
       case 'contracts':
         return <ContractsContent />
       case 'supply':

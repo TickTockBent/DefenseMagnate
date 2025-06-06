@@ -1,4 +1,4 @@
-import { useGameStore } from './state/gameStore'
+import { useGameStore } from './state/gameStoreWithEquipment'
 import { HorizontalTabs } from './components/HorizontalTabs'
 import { ContentPanel } from './components/ContentPanel'
 import { ResourcePanel } from './components/ResourcePanel'
@@ -10,15 +10,17 @@ function App() {
   const credits = useGameStore((state) => state.credits)
   const updateGameTime = useGameStore((state) => state.updateGameTime)
   const togglePause = useGameStore((state) => state.togglePause)
+  const updateProduction = useGameStore((state) => state.updateProduction)
   
   // Global game clock - runs every second
   useEffect(() => {
     const interval = setInterval(() => {
       updateGameTime(1000) // 1 second elapsed
+      updateProduction() // Update production systems
     }, 1000)
     
     return () => clearInterval(interval)
-  }, [updateGameTime])
+  }, [updateGameTime, updateProduction])
   
   return (
     <div className="min-h-screen bg-gray-950 p-4">

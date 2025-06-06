@@ -1,10 +1,13 @@
 console.log('A. gameStore.ts starting to load')
 
 import { create } from 'zustand';
-import type { Facility } from '../types/facility';
-import { createGarage } from '../types/facility';
-import type { ProductionLine } from '../types/productionLine';
-import type { ManufacturingMethod, ProductionStepInstance } from '../types/manufacturing';
+import { 
+  Facility,
+  createGarage,
+  ProductionLine,
+  ManufacturingMethod, 
+  ProductionStepInstance
+} from '../types';
 import { getProductData, canAffordMaterials } from '../data/productHelpers';
 import { isProductionComplete } from '../utils/timeSystem';
 import { createGameTime, updateGameTime, type GameTime } from '../utils/gameClock';

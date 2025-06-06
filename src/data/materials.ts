@@ -1,5 +1,5 @@
 // Material definitions
-import type { Material } from '../types/material';
+import { Material } from '../types';
 
 export const materials: Record<string, Material> = {
   // Basic materials

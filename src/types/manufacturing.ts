@@ -1,19 +1,7 @@
 // Manufacturing system type definitions
 
-// Product states - represents the condition/quality level of a product
-export type ProductState = 
-  | 'pristine'     // Brand new, full quality rating
-  | 'functional'   // Normal working condition
-  | 'damaged'      // Broken but repairable
-  | 'junk'         // Low quality but operational
-  | 'scrap'        // Non-functional, only good for raw materials
-
-// Labor skill requirements for manufacturing steps
-export type LaborSkill = 
-  | 'unskilled'        // Basic manual labor
-  | 'skilled_technician' // Trained technician
-  | 'skilled_machinist'  // Machining specialist
-  | 'quality_inspector' // Quality control specialist
+import { ProductState, LaborSkill } from '../constants/enums';
+import type { TagRequirement } from './equipment';
 
 // Material requirement for a manufacturing step
 export interface MaterialRequirement {
@@ -29,9 +17,21 @@ export interface ManufacturingStep {
   duration_percentage: number; // Percentage of total production time
   material_requirements: MaterialRequirement[];
   labor_skill: LaborSkill;
+  labor_intensity?: number; // 0-1, how much attention needed (default 1)
+  
+  // Equipment requirements using tag system
+  required_tags?: TagRequirement[]; // Optional for backward compatibility
+  
+  // Failure mechanics
   can_fail: boolean;
   failure_chance: number; // 0.0 to 1.0 (0% to 100%)
   failure_result?: 'scrap' | 'downgrade' | 'wasted_materials'; // What happens on failure
+  
+  // Special step properties
+  requires_continuous_operation?: boolean; // Can't be paused
+  requires_quality_check?: boolean; // Needs QC before proceeding
+  batchable?: boolean; // Can process multiple items together
+  
   description?: string; // Optional description of what this step does
 }
 
@@ -125,8 +125,8 @@ export interface MultiStepProductionLine {
   actual_output_quality?: number; // Determined when production completes
 }
 
-// Helper type for step progress calculation
-export interface StepProgress {
+// Helper type for step progress calculation (legacy)
+export interface LegacyStepProgress {
   step_index: number;
   step_name: string;
   status: 'pending' | 'active' | 'completed' | 'failed';

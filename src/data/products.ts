@@ -1,15 +1,13 @@
 // Product definitions
 
-import type { 
-  Product
-} from '../types/product';
 import { 
+  Product,
   ProductCategory, 
   MilitaryClassification, 
   ToolType, 
   DefectType,
   CustomerType
-} from '../types/product';
+} from '../types';
 
 export const products: Record<string, Product> = {
   basic_sidearm: {

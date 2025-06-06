@@ -1,4 +1,4 @@
-import { useGameStore } from '../state/gameStore'
+import { useGameStore } from '../state/gameStoreWithEquipment'
 
 export function ResourcePanel() {
   const resources = useGameStore((state) => state.resources)

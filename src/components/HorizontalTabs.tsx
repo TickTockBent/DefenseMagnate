@@ -1,10 +1,11 @@
-import { useGameStore } from '../state/gameStore'
+import { useGameStore } from '../state/gameStoreWithEquipment'
 
-type Tab = 'research' | 'manufacturing' | 'contracts' | 'supply'
+type Tab = 'research' | 'manufacturing' | 'equipment' | 'contracts' | 'supply'
 
 const tabs: { id: Tab; label: string; description: string }[] = [
   { id: 'research', label: 'R&D', description: 'Research & Development' },
   { id: 'manufacturing', label: 'Manufacturing', description: 'Production Facilities' },
+  { id: 'equipment', label: 'Equipment', description: 'Equipment Management' },
   { id: 'contracts', label: 'Contracts', description: 'Available Jobs' },
   { id: 'supply', label: 'Supply', description: 'Supply Chains' },
 ]
