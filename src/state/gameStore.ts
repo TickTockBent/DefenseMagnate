@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import type { Facility } from '../types/facility';
 import { createGarage } from '../types/facility';
 import type { ProductionLine } from '../types/productionLine';
+import type { ManufacturingMethod, ProductionStepInstance } from '../types/manufacturing';
 import { getProductData, canAffordMaterials } from '../data/productHelpers';
 import { isProductionComplete } from '../utils/timeSystem';
 import { createGameTime, updateGameTime, type GameTime } from '../utils/gameClock';
@@ -85,11 +86,38 @@ interface GameState {
   updateMaterial: (material: string, amount: number) => void;
   updateFacility: (facilityId: string, updates: Partial<Facility>) => void;
   startProduction: (facilityId: string, productId: string, quantity: number) => void;
+  startMultiStepProduction: (facilityId: string, productId: string, methodId: string, quantity: number) => void;
   updateProductionLine: (lineId: string, updates: Partial<ProductionLine>) => void;
   processCompletedProduction: () => void;
+  processMultiStepProduction: () => void;
 }
 
 console.log('C. Creating store...')
+
+// Helper function to check if we can afford materials for a manufacturing method
+function canAffordMethodMaterials(method: ManufacturingMethod, quantity: number, materials: Record<string, number>): boolean {
+  for (const step of method.steps) {
+    for (const matReq of step.material_requirements) {
+      const needed = matReq.quantity * quantity;
+      const available = materials[matReq.material_id] || 0;
+      if (available < needed) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// Helper function to create step instances for a production line
+function createStepInstances(method: ManufacturingMethod): ProductionStepInstance[] {
+  return method.steps.map(step => ({
+    step_id: step.id,
+    status: 'pending',
+    materials_consumed: false,
+    labor_assigned: false,
+    failure_rolled: false
+  }));
+}
 
 export const useGameStore = create<GameState>()((set) => {
   console.log('D. Store initializer called')
@@ -116,6 +144,9 @@ export const useGameStore = create<GameState>()((set) => {
     'steel': 20,
     'plastic': 10,
     'basic_electronics': 5,
+    'low_tech_spares': 15,
+    'damaged_basic_sidearm': 3,
+    'machined_parts': 2,
   },
   
   // Player starts with a single garage
@@ -270,6 +301,71 @@ export const useGameStore = create<GameState>()((set) => {
     };
   }),
   
+  startMultiStepProduction: (facilityId, productId, methodId, quantity) => set((state) => {
+    const product = getProductData(productId);
+    if (!product || !product.manufacturing_methods) {
+      console.warn('Product not found or has no manufacturing methods:', productId);
+      return state;
+    }
+    
+    const method = product.manufacturing_methods.find(m => m.id === methodId);
+    if (!method) {
+      console.warn('Manufacturing method not found:', methodId);
+      return state;
+    }
+    
+    // Check if we have enough materials for all steps
+    if (!canAffordMethodMaterials(method, quantity, state.materials)) {
+      console.warn('Not enough materials for multi-step production');
+      return state;
+    }
+    
+    // Create multi-step production line
+    const lineId = `multistep_${Date.now()}`;
+    const newLine: ProductionLine = {
+      id: lineId,
+      facilityId,
+      productId,
+      quantity,
+      status: 'active',
+      startGameTime: state.gameTime.totalGameHours,
+      durationHours: method.total_duration_hours,
+      
+      // Multi-step specific fields
+      manufacturing_method: method,
+      current_step_index: 0,
+      step_instances: createStepInstances(method),
+      input_product_state: method.input_state,
+      expected_output_state: method.output_state,
+      expected_quality_range: method.output_quality_range,
+      input_materials_loaded: {},
+    };
+    
+    // Consume materials for first step (only those marked as consumed_at_start)
+    const updatedMaterials = { ...state.materials };
+    const firstStep = method.steps[0];
+    firstStep.material_requirements.forEach(req => {
+      if (req.consumed_at_start) {
+        updatedMaterials[req.material_id] = 
+          (updatedMaterials[req.material_id] || 0) - (req.quantity * quantity);
+      }
+    });
+    
+    // Mark first step as active and materials consumed
+    if (newLine.step_instances) {
+      newLine.step_instances[0].status = 'active';
+      newLine.step_instances[0].start_game_time = state.gameTime.totalGameHours;
+      newLine.step_instances[0].materials_consumed = firstStep.material_requirements.some(r => r.consumed_at_start);
+      newLine.step_instances[0].labor_assigned = true; // Simplified for now
+    }
+    
+    return {
+      ...state,
+      productionLines: [...state.productionLines, newLine],
+      materials: updatedMaterials,
+    };
+  }),
+  
   updateProductionLine: (lineId, updates) => set((state) => ({
     productionLines: state.productionLines.map((line) =>
       line.id === lineId
@@ -303,6 +399,129 @@ export const useGameStore = create<GameState>()((set) => {
     return {
       ...state,
       productionLines: activeLines,
+      completedProducts: updatedProducts,
+    };
+  }),
+  
+  // Process multi-step production lines with individual step progression
+  processMultiStepProduction: () => set((state) => {
+    const updatedLines: ProductionLine[] = [];
+    const completedLines: ProductionLine[] = [];
+    let updatedMaterials = { ...state.materials };
+    
+    state.productionLines.forEach(line => {
+      // Skip if not a multi-step production line
+      if (!line.manufacturing_method || !line.step_instances) {
+        updatedLines.push(line);
+        return;
+      }
+      
+      const method = line.manufacturing_method;
+      const currentStepIndex = line.current_step_index || 0;
+      const currentStep = method.steps[currentStepIndex];
+      const stepInstance = line.step_instances[currentStepIndex];
+      
+      if (!currentStep || !stepInstance) {
+        updatedLines.push(line);
+        return;
+      }
+      
+      // Calculate step duration and check if current step is complete
+      const stepDurationHours = method.total_duration_hours * (currentStep.duration_percentage / 100);
+      const stepStartTime = stepInstance.start_game_time || line.startGameTime;
+      const isStepComplete = state.gameTime.totalGameHours >= stepStartTime + stepDurationHours;
+      
+      if (isStepComplete && stepInstance.status === 'active') {
+        // Handle step completion
+        let newLine = { ...line };
+        
+        // Handle failure check if step can fail and hasn't been rolled yet
+        if (currentStep.can_fail && !stepInstance.failure_rolled) {
+          const failureRoll = Math.random();
+          if (failureRoll < currentStep.failure_chance) {
+            // Step failed
+            stepInstance.status = 'failed';
+            stepInstance.failure_rolled = true;
+            newLine.status = 'failed';
+            updatedLines.push(newLine);
+            return;
+          }
+        }
+        
+        // Mark current step as completed
+        stepInstance.status = 'completed';
+        stepInstance.failure_rolled = true;
+        
+        // Consume materials for this step if not consumed at start
+        currentStep.material_requirements.forEach(req => {
+          if (!req.consumed_at_start) {
+            updatedMaterials[req.material_id] = 
+              (updatedMaterials[req.material_id] || 0) - (req.quantity * (line.quantity || 1));
+          }
+        });
+        
+        // Move to next step or complete production
+        if (currentStepIndex + 1 < method.steps.length) {
+          // Move to next step
+          newLine.current_step_index = currentStepIndex + 1;
+          const nextStep = method.steps[currentStepIndex + 1];
+          const nextStepInstance = newLine.step_instances![currentStepIndex + 1];
+          
+          // Start next step
+          nextStepInstance.status = 'active';
+          nextStepInstance.start_game_time = state.gameTime.totalGameHours;
+          nextStepInstance.labor_assigned = true; // Simplified
+          
+          // Consume materials for next step if marked as consumed_at_start
+          nextStep.material_requirements.forEach(req => {
+            if (req.consumed_at_start) {
+              updatedMaterials[req.material_id] = 
+                (updatedMaterials[req.material_id] || 0) - (req.quantity * (line.quantity || 1));
+              nextStepInstance.materials_consumed = true;
+            }
+          });
+          
+          updatedLines.push(newLine);
+        } else {
+          // All steps completed - production is done
+          newLine.status = 'completed';
+          
+          // Calculate final quality (simplified - just use middle of range)
+          const qualityRange = method.output_quality_range;
+          newLine.actual_output_quality = Math.floor((qualityRange[0] + qualityRange[1]) / 2);
+          
+          completedLines.push(newLine);
+        }
+      } else {
+        // Step still in progress
+        updatedLines.push(line);
+      }
+    });
+    
+    // Add completed products to inventory
+    const updatedProducts = { ...state.completedProducts };
+    completedLines.forEach(line => {
+      if (!line.productId) return;
+      
+      const product = getProductData(line.productId);
+      if (!product) return;
+      
+      // Create product name with state suffix
+      let productName = product.name;
+      if (line.expected_output_state && product.state_variants) {
+        const stateVariant = product.state_variants[line.expected_output_state];
+        if (stateVariant) {
+          productName += stateVariant.name_suffix;
+        }
+      }
+      
+      updatedProducts[productName] = (updatedProducts[productName] || 0) + (line.quantity || 1);
+    });
+    
+    return {
+      ...state,
+      productionLines: updatedLines,
+      materials: updatedMaterials,
       completedProducts: updatedProducts,
     };
   }),
