@@ -115,7 +115,8 @@ export function createGarage(name: string): Facility {
     active_production: [{
       id: 'line-1',
       productId: null,
-      progress: 0,
+      startGameTime: 0,
+      durationHours: 0,
       materials_loaded: false,
       labor_assigned: 0,
     }],

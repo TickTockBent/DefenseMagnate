@@ -295,6 +295,7 @@ export const useGameStore = create<GameState>()((set) => {
     // Add completed products to inventory
     const updatedProducts = { ...state.completedProducts };
     completedLines.forEach(line => {
+      if (!line.productId) return;
       const productName = getProductData(line.productId)?.name || line.productId;
       updatedProducts[productName] = (updatedProducts[productName] || 0) + (line.quantity || 1);
     });

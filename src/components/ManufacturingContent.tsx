@@ -117,6 +117,7 @@ export function ManufacturingContent() {
           <h3 className="text-sm font-mono text-gray-400 mb-4">ACTIVE PRODUCTION</h3>
           <div className="space-y-3">
             {productionLines.map((line) => {
+              if (!line.productId) return null
               const product = getProductData(line.productId)
               if (!product) return null
               
