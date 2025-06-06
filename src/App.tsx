@@ -2,11 +2,23 @@ import { useGameStore } from './state/gameStore'
 import { HorizontalTabs } from './components/HorizontalTabs'
 import { ContentPanel } from './components/ContentPanel'
 import { ResourcePanel } from './components/ResourcePanel'
+import { formatGameTime, formatGameSpeed } from './utils/gameClock'
+import { useEffect } from 'react'
 
 function App() {
-  const turn = useGameStore((state) => state.turn)
+  const gameTime = useGameStore((state) => state.gameTime)
   const credits = useGameStore((state) => state.credits)
-  const advanceTurn = useGameStore((state) => state.advanceTurn)
+  const updateGameTime = useGameStore((state) => state.updateGameTime)
+  const togglePause = useGameStore((state) => state.togglePause)
+  
+  // Global game clock - runs every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      updateGameTime(1000) // 1 second elapsed
+    }, 1000)
+    
+    return () => clearInterval(interval)
+  }, [updateGameTime])
   
   return (
     <div className="min-h-screen bg-gray-950 p-4">
@@ -20,8 +32,14 @@ function App() {
           </div>
           <div className="flex items-center space-x-6">
             <div className="text-sm">
-              <span className="text-gray-400">TURN:</span>
-              <span className="text-teal-400 font-mono ml-2">{turn.toString().padStart(3, '0')}</span>
+              <span className="text-gray-400">TIME:</span>
+              <span className="text-teal-400 font-mono ml-2">{formatGameTime(gameTime)}</span>
+            </div>
+            <div className="text-sm">
+              <span className="text-gray-400">SPEED:</span>
+              <span className={`font-mono ml-2 ${gameTime.isPaused ? 'text-orange-400' : 'text-teal-400'}`}>
+                {formatGameSpeed(gameTime.isPaused ? 0 : gameTime.gameSpeed)}
+              </span>
             </div>
             <div className="text-sm">
               <span className="text-gray-400">CREDITS:</span>
@@ -52,18 +70,24 @@ function App() {
         </div>
       </div>
 
-      {/* Actions */}
+      {/* Time Controls */}
       <div className="terminal-card">
         <div className="flex items-center justify-between">
           <div className="ascii-accent text-sm">
-            {`> STATUS: OPERATIONAL`}
+            {`> STATUS: ${gameTime.isPaused ? 'PAUSED' : 'OPERATIONAL'}`}
           </div>
-          <button 
-            onClick={advanceTurn}
-            className="btn-primary"
-          >
-            ADVANCE TURN
-          </button>
+          <div className="flex space-x-3">
+            <button 
+              onClick={togglePause}
+              className={`px-4 py-2 font-mono rounded transition-colors ${
+                gameTime.isPaused 
+                  ? 'bg-green-600 hover:bg-green-500 text-white' 
+                  : 'bg-orange-600 hover:bg-orange-500 text-white'
+              }`}
+            >
+              {gameTime.isPaused ? '▶ RESUME' : '⏸ PAUSE'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

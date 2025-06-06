@@ -5,6 +5,8 @@ import type { Facility } from '../types/facility';
 import { createGarage } from '../types/facility';
 import type { ProductionLine } from '../types/productionLine';
 import { getProductData, canAffordMaterials } from '../data/productHelpers';
+import { isProductionComplete } from '../utils/timeSystem';
+import { createGameTime, updateGameTime, type GameTime } from '../utils/gameClock';
 
 console.log('B. gameStore imports completed')
 
@@ -42,7 +44,7 @@ interface Research {
 
 interface GameState {
   // Core game state
-  turn: number;
+  gameTime: GameTime;
   credits: number;
   
   // Resources & Materials
@@ -74,7 +76,9 @@ interface GameState {
   
   // Actions
   setActiveTab: (tab: GameState['activeTab']) => void;
-  advanceTurn: () => void;
+  updateGameTime: (deltaMs: number) => void;
+  togglePause: () => void;
+  setGameSpeed: (speed: number) => void;
   startResearch: (researchId: string) => void;
   acceptContract: (contractId: string) => void;
   updateResource: (resource: string, amount: number) => void;
@@ -82,6 +86,7 @@ interface GameState {
   updateFacility: (facilityId: string, updates: Partial<Facility>) => void;
   startProduction: (facilityId: string, productId: string, quantity: number) => void;
   updateProductionLine: (lineId: string, updates: Partial<ProductionLine>) => void;
+  processCompletedProduction: () => void;
 }
 
 console.log('C. Creating store...')
@@ -99,7 +104,7 @@ export const useGameStore = create<GameState>()((set) => {
   
   return {
   // Initial state
-  turn: 1,
+  gameTime: createGameTime(),
   credits: 500, // Starting with very little money
   
   resources: {
@@ -177,8 +182,16 @@ export const useGameStore = create<GameState>()((set) => {
   // Actions
   setActiveTab: (tab) => set({ activeTab: tab }),
   
-  advanceTurn: () => set((state) => ({
-    turn: state.turn + 1,
+  updateGameTime: (deltaMs) => set((state) => ({
+    gameTime: updateGameTime(state.gameTime, deltaMs),
+  })),
+  
+  togglePause: () => set((state) => ({
+    gameTime: { ...state.gameTime, isPaused: !state.gameTime.isPaused },
+  })),
+  
+  setGameSpeed: (speed) => set((state) => ({
+    gameTime: { ...state.gameTime, gameSpeed: speed },
   })),
   
   startResearch: (researchId) => set((state) => ({
@@ -231,15 +244,16 @@ export const useGameStore = create<GameState>()((set) => {
       return state;
     }
     
-    // Create production line
+    // Create game-time production line
     const lineId = `prod_${Date.now()}`;
     const newLine: ProductionLine = {
       id: lineId,
       facilityId,
       productId,
       quantity,
-      progress: 0,
       status: 'active',
+      startGameTime: state.gameTime.totalGameHours,
+      durationHours: product.base_labor_hours, // Use labor hours as production time
     };
     
     // Deduct materials
@@ -263,6 +277,34 @@ export const useGameStore = create<GameState>()((set) => {
         : line
     ),
   })),
+  
+  // Check for completed production and move to inventory
+  processCompletedProduction: () => set((state) => {
+    const completedLines: ProductionLine[] = [];
+    const activeLines: ProductionLine[] = [];
+    
+    // Separate completed from active production using game time
+    state.productionLines.forEach(line => {
+      if (isProductionComplete(line.startGameTime, line.durationHours, state.gameTime.totalGameHours)) {
+        completedLines.push(line);
+      } else {
+        activeLines.push(line);
+      }
+    });
+    
+    // Add completed products to inventory
+    const updatedProducts = { ...state.completedProducts };
+    completedLines.forEach(line => {
+      const productName = getProductData(line.productId)?.name || line.productId;
+      updatedProducts[productName] = (updatedProducts[productName] || 0) + (line.quantity || 1);
+    });
+    
+    return {
+      ...state,
+      productionLines: activeLines,
+      completedProducts: updatedProducts,
+    };
+  }),
 }});
 
 console.log('I. Store created successfully')

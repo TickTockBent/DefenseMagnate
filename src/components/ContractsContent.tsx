@@ -2,7 +2,7 @@ import { useGameStore } from '../state/gameStore'
 
 export function ContractsContent() {
   const contracts = useGameStore((state) => state.contracts)
-  const turn = useGameStore((state) => state.turn)
+  const gameTime = useGameStore((state) => state.gameTime)
   const acceptContract = useGameStore((state) => state.acceptContract)
 
   const activeContracts = contracts.filter(c => c.status === 'active')
@@ -21,7 +21,7 @@ export function ContractsContent() {
         {activeContracts.length > 0 ? (
           <div className="space-y-3">
             {activeContracts.map((contract) => {
-              const timeLeft = contract.deadline - turn
+              const timeLeft = contract.deadline - gameTime.days
               const urgencyClass = timeLeft <= 1 ? 'status-danger' : timeLeft <= 2 ? 'status-warning' : 'status-good'
               
               return (
@@ -34,7 +34,7 @@ export function ContractsContent() {
                     <div className="text-right">
                       <div className="status-good font-mono">{contract.payment.toLocaleString()}cr</div>
                       <div className={`text-xs ${urgencyClass}`}>
-                        {timeLeft} turns remaining
+                        {timeLeft} days remaining
                       </div>
                     </div>
                   </div>
@@ -74,7 +74,7 @@ export function ContractsContent() {
                     <div className="text-right">
                       <div className="status-good font-mono text-lg">{contract.payment.toLocaleString()}cr</div>
                       <div className="text-xs text-gray-500">
-                        Due: {contract.deadline} turns
+                        Due: {contract.deadline} days
                       </div>
                     </div>
                   </div>

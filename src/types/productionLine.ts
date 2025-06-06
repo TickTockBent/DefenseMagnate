@@ -5,18 +5,18 @@ export interface ProductionLine {
   facilityId?: string; // Optional for facility-embedded lines
   productId: string | null;
   quantity?: number;
-  progress: number; // 0-100
-  status?: 'idle' | 'active' | 'paused' | 'blocked';
+  status?: 'idle' | 'active' | 'paused' | 'blocked' | 'completed';
   blockReason?: string; // e.g., "Missing material: steel"
+  
+  // Game-time production tracking
+  startGameTime: number; // game hours when production started
+  durationHours: number; // how many game hours this takes
   
   // Legacy fields for compatibility with facility system
   materials_loaded?: boolean;
   labor_assigned?: number;
   
-  // TODO: Add more fields as we develop the production system
-  // - material allocation
-  // - worker assignment
-  // - quality tracking
-  // - defect rate
-  // - completion time estimates
+  // Computed properties (calculated from startTime + duration)
+  // progress: calculated in real-time
+  // timeRemaining: calculated in real-time
 }

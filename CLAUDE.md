@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Defense Magnate is a single-player, browser-playable management simulation game where players run an arms manufacturing company in a fractured galactic warzone. The game is built as a web application with no backend, using browser localStorage for saves and compressed string codes for save portability.
+Defense Magnate is a single-player, browser-playable real-time management simulation game where players run an arms manufacturing company in a fractured galactic warzone. The game operates in real-time with a 1 minute = 1 game hour time scale, allowing players to watch their production lines progress naturally. The game is built as a web application with no backend, using browser localStorage for saves and compressed string codes for save portability.
 
 ## Technology Stack
 
@@ -56,11 +56,20 @@ npm run typecheck
 
 ### Game State Structure
 The game uses a centralized state pattern with Zustand. The core `GameState` interface includes:
+- `gameTime`: Real-time clock with pause/speed controls (1 real minute = 1 game hour)
 - `resources`: Material and component inventory
 - `research`: Current and completed R&D projects
-- `factories`: Production facilities and their queues
-- `contracts`: Active and available contracts
-- `turn`: Current game turn/tick
+- `facilities`: Production facilities with real-time production lines
+- `contracts`: Active and available contracts with real-time deadlines
+- `materials`: Raw materials for production
+- `completedProducts`: Finished goods inventory
+
+### Real-Time System
+- **Time Scale**: 1 real minute = 1 game hour for balanced pacing
+- **Global Clock**: Centralized time system that drives all game mechanics
+- **Pause/Resume**: Players can pause the entire game at any time
+- **Production**: Items craft in real-time (e.g., Basic Sidearm takes 2 minutes)
+- **Future Speed Controls**: Framework ready for variable speed (1x to 100x+)
 
 ### Save System
 - Autosave to browser `localStorage`

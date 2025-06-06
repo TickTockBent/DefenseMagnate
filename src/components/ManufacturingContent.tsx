@@ -1,14 +1,28 @@
 import { useGameStore } from '../state/gameStore'
 import { getAllProductIds, getProductData, canAffordMaterials } from '../data/productHelpers'
+import { getProductionProgress, formatGameTimeRemaining, getProductionTimeRemainingHours } from '../utils/timeSystem'
+import { useEffect } from 'react'
 
 export function ManufacturingContent() {
   const facilities = useGameStore((state) => state.facilities)
   const materials = useGameStore((state) => state.materials)
   const productionLines = useGameStore((state) => state.productionLines)
+  const completedProducts = useGameStore((state) => state.completedProducts)
+  const gameTime = useGameStore((state) => state.gameTime)
   const startProduction = useGameStore((state) => state.startProduction)
+  const processCompletedProduction = useGameStore((state) => state.processCompletedProduction)
   
   const availableProducts = getAllProductIds()
   const garage = facilities[0] // Our starting garage
+  
+  // Real-time update loop
+  useEffect(() => {
+    const interval = setInterval(() => {
+      processCompletedProduction()
+    }, 1000) // Check every second
+    
+    return () => clearInterval(interval)
+  }, [processCompletedProduction])
 
   const handleStartProduction = (productId: string) => {
     if (garage) {
@@ -106,34 +120,60 @@ export function ManufacturingContent() {
               const product = getProductData(line.productId)
               if (!product) return null
               
+              const progress = getProductionProgress(line.startGameTime, line.durationHours, gameTime.totalGameHours)
+              const timeRemaining = getProductionTimeRemainingHours(line.startGameTime, line.durationHours, gameTime.totalGameHours)
+              const isComplete = progress >= 100
+              
               return (
-                <div key={line.id} className="terminal-card border-teal-600">
+                <div key={line.id} className={`terminal-card ${isComplete ? 'border-green-600' : 'border-teal-600'}`}>
                   <div className="flex justify-between items-start">
                     <div>
                       <h4 className="text-white font-medium">{product.name}</h4>
                       <div className="text-sm text-gray-400">
-                        Quantity: {line.quantity} • Progress: {line.progress}%
+                        Quantity: {line.quantity} • Progress: {Math.floor(progress)}%
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
-                        Status: {line.status}
+                        Status: {isComplete ? 'Complete!' : line.status}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-teal-400 text-sm font-mono">IN PROGRESS</div>
-                      <div className="text-xs text-gray-500">ETA: Next turn</div>
+                      <div className={`text-sm font-mono ${isComplete ? 'status-good' : 'text-teal-400'}`}>
+                        {isComplete ? 'COMPLETE' : 'IN PROGRESS'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {formatGameTimeRemaining(timeRemaining)}
+                      </div>
                     </div>
                   </div>
                   <div className="mt-3">
                     <div className="progress-bar">
                       <div 
                         className="progress-fill" 
-                        style={{ width: `${line.progress}%` }}
+                        style={{ width: `${Math.min(100, progress)}%` }}
                       ></div>
                     </div>
                   </div>
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Completed Products Inventory */}
+      {Object.keys(completedProducts).length > 0 && (
+        <div>
+          <h3 className="text-sm font-mono text-gray-400 mb-4">COMPLETED PRODUCTS</h3>
+          <div className="grid grid-cols-3 gap-4">
+            {Object.entries(completedProducts).map(([productName, quantity]) => (
+              <div key={productName} className="terminal-card border-green-600">
+                <div className="text-center">
+                  <h4 className="text-white font-medium">{productName}</h4>
+                  <div className="text-2xl font-mono text-green-400 my-2">{quantity}</div>
+                  <div className="text-xs text-gray-500">Units ready</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
