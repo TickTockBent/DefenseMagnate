@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type { Facility } from '../types/facility';
 import { createGarage } from '../types/facility';
 import type { ProductionLine } from '../types/productionLine';
-import { getProduct } from '../data/products';
+import { getProductData, canAffordMaterials } from '../data/productHelpers';
 
 console.log('B. gameStore imports completed')
 
@@ -219,15 +219,14 @@ export const useGameStore = create<GameState>()((set) => {
   })),
   
   startProduction: (facilityId, productId, quantity) => set((state) => {
-    const product = getProduct(productId);
-    if (!product) return state;
+    const product = getProductData(productId);
+    if (!product) {
+      console.warn('Unknown product:', productId);
+      return state;
+    }
     
     // Check if we have enough materials
-    const canProduce = product.materials_required.every(req => 
-      (state.materials[req.material_id] || 0) >= req.quantity_per_unit * quantity
-    );
-    
-    if (!canProduce) {
+    if (!canAffordMaterials(productId, quantity, state.materials)) {
       console.warn('Not enough materials for production');
       return state;
     }
@@ -251,6 +250,7 @@ export const useGameStore = create<GameState>()((set) => {
     });
     
     return {
+      ...state,
       productionLines: [...state.productionLines, newLine],
       materials: updatedMaterials,
     };

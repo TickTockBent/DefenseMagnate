@@ -1,4 +1,4 @@
-import { useGameStore } from '../state/gameStore-simple'
+import { useGameStore } from '../state/gameStore'
 
 type Tab = 'research' | 'manufacturing' | 'contracts' | 'supply'
 

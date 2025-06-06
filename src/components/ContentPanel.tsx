@@ -1,4 +1,4 @@
-import { useGameStore } from '../state/gameStore-simple'
+import { useGameStore } from '../state/gameStore'
 import { ResearchContent } from './ResearchContent'
 import { ManufacturingContent } from './ManufacturingContent'
 import { ContractsContent } from './ContractsContent'

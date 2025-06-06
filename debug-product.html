@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Product Import</title>
+</head>
+<body>
+    <h1>Product Import Debug</h1>
+    <div id="output"></div>
+    
+    <script type="module">
+        console.log('Starting debug...')
+        
+        try {
+            // Test importing just the Product interface
+            const productModule = await import('./src/types/product.ts')
+            console.log('✅ Product module loaded')
+            console.log('Exports:', Object.keys(productModule))
+            
+            if ('Product' in productModule) {
+                console.log('✅ Product export found')
+            } else {
+                console.log('❌ Product export NOT found')
+                console.log('Available exports:', Object.keys(productModule))
+            }
+            
+            document.getElementById('output').innerHTML = `
+                <p>✅ Product module loaded successfully</p>
+                <p>Available exports: ${Object.keys(productModule).join(', ')}</p>
+            `
+            
+        } catch (error) {
+            console.error('❌ Error importing Product:', error)
+            document.getElementById('output').innerHTML = `
+                <p style="color: red;">❌ Error: ${error.message}</p>
+            `
+        }
+    </script>
+</body>
+</html>

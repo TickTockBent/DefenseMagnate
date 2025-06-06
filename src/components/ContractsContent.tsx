@@ -1,4 +1,4 @@
-import { useGameStore } from '../state/gameStore-simple'
+import { useGameStore } from '../state/gameStore'
 
 export function ContractsContent() {
   const contracts = useGameStore((state) => state.contracts)
