@@ -37,6 +37,16 @@ export function ManufacturingContent() {
         <span className="ascii-accent">⚙</span> MANUFACTURING
       </div>
 
+      {/* Implementation Status Notice */}
+      <div className="terminal-card border-blue-600">
+        <div className="text-center">
+          <div className="text-blue-400 font-mono text-lg mb-2">⚠ PARTIALLY IMPLEMENTED</div>
+          <div className="text-gray-400 text-sm">
+            Basic production works with real-time progress. Missing: complex assembly lines, material logistics, quality control, and advanced manufacturing features.
+          </div>
+        </div>
+      </div>
+
       {/* Garage Status */}
       {garage && (
         <div className="terminal-card">
@@ -138,11 +148,11 @@ export function ManufacturingContent() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className={`text-sm font-mono ${isComplete ? 'status-good' : 'text-teal-400'}`}>
-                        {isComplete ? 'COMPLETE' : 'IN PROGRESS'}
+                      <div className={`text-sm font-mono ${isComplete ? 'status-good' : gameTime.isPaused ? 'text-yellow-400' : 'text-teal-400'}`}>
+                        {isComplete ? 'COMPLETE' : gameTime.isPaused ? 'PAUSED' : 'IN PROGRESS'}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {formatGameTimeRemaining(timeRemaining)}
+                        {isComplete ? 'Ready for collection' : formatGameTimeRemaining(timeRemaining)}
                       </div>
                     </div>
                   </div>

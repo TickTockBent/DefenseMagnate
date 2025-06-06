@@ -39,6 +39,16 @@ export function SupplyContent() {
         <span className="ascii-accent">◊</span> SUPPLY LINES
       </div>
 
+      {/* Not Implemented Notice */}
+      <div className="terminal-card border-yellow-600">
+        <div className="text-center">
+          <div className="text-yellow-400 font-mono text-lg mb-2">⚠ NOT YET IMPLEMENTED</div>
+          <div className="text-gray-400 text-sm">
+            Supply chain management is planned but not yet functional. Currently showing placeholder data.
+          </div>
+        </div>
+      </div>
+
       {/* Active Suppliers */}
       <div>
         <h3 className="text-sm font-mono text-gray-400 mb-4">ACTIVE SUPPLIERS</h3>
@@ -62,7 +72,7 @@ export function SupplyContent() {
                   <span className="text-gray-400">Price:</span>
                   <span className="font-mono text-teal-400 ml-2">{supplier.price}cr/unit</span>
                 </div>
-                <button className="btn-secondary text-xs">
+                <button className="btn-secondary text-xs" disabled>
                   Order Materials
                 </button>
               </div>
@@ -128,7 +138,7 @@ export function SupplyContent() {
                     <span className="text-gray-400">Price:</span>
                     <span className="font-mono text-teal-400 ml-2">{supplier.price}cr/unit</span>
                   </div>
-                  <button className="btn-secondary text-xs">
+                  <button className="btn-secondary text-xs" disabled>
                     Establish Route
                   </button>
                 </div>
@@ -140,10 +150,10 @@ export function SupplyContent() {
 
       {/* Actions */}
       <div className="grid grid-cols-2 gap-4">
-        <button className="btn-secondary">
+        <button className="btn-secondary" disabled>
           Scout New Suppliers
         </button>
-        <button className="btn-secondary">
+        <button className="btn-secondary" disabled>
           Negotiate Prices
         </button>
       </div>

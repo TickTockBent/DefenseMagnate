@@ -3,13 +3,22 @@ import { useGameStore } from '../state/gameStore'
 export function ResearchContent() {
   const research = useGameStore((state) => state.research)
   const credits = useGameStore((state) => state.credits)
-  const startResearch = useGameStore((state) => state.startResearch)
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="terminal-header">
         <span className="ascii-accent">◯</span> RESEARCH & DEVELOPMENT
+      </div>
+
+      {/* Not Implemented Notice */}
+      <div className="terminal-card border-yellow-600">
+        <div className="text-center">
+          <div className="text-yellow-400 font-mono text-lg mb-2">⚠ NOT YET IMPLEMENTED</div>
+          <div className="text-gray-400 text-sm">
+            Research system is planned but not yet functional. Currently showing placeholder data.
+          </div>
+        </div>
       </div>
 
       {/* Current Project */}
@@ -64,7 +73,7 @@ export function ResearchContent() {
                     ? 'border-gray-600 hover:border-yellow-500 cursor-pointer' 
                     : 'border-gray-700'
                 }`}
-                onClick={() => canStart && canAfford && startResearch(item.id)}
+                onClick={() => {/* Not implemented */}}
               >
                 <div className="flex justify-between items-start">
                   <div className="flex-1">

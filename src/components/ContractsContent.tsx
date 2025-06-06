@@ -15,6 +15,16 @@ export function ContractsContent() {
         <span className="ascii-accent">◈</span> CONTRACTS
       </div>
 
+      {/* Implementation Status Notice */}
+      <div className="terminal-card border-blue-600">
+        <div className="text-center">
+          <div className="text-blue-400 font-mono text-lg mb-2">⚠ PARTIALLY IMPLEMENTED</div>
+          <div className="text-gray-400 text-sm">
+            You can accept contracts, but fulfillment and delivery systems are not yet implemented.
+          </div>
+        </div>
+      </div>
+
       {/* Active Contracts */}
       <div>
         <h3 className="text-sm font-mono text-gray-400 mb-4">ACTIVE CONTRACTS</h3>
