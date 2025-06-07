@@ -12,27 +12,42 @@ Defense Magnate is a browser-based management simulation where you:
 - **Fulfill contracts** with quality requirements and deadline pressure
 - **Build your business** through the complete acquire-manufacture-sell cycle
 
-## 🔧 Recent Updates - Economic Systems Complete
+## 🔧 Recent Updates - Materials & Contracts v1 Complete ✅
 
-### 📋 **Latest Features - Material Standardization & Markets**
+### 📋 **Patch Notes v1.2 - Materials & Contracts Arc (December 2024)**
 
-#### **✨ NEW: Tag-Based Inventory System**
-- **Unified Items**: Single item types with quality and condition tags
-- **Quality System**: 0-100% quality scale affecting value and contracts
-- **Smart Storage**: Items grouped by type with expandable categories
-- **Manufacturing Integration**: Products receive tags like [forged], [restored], [junk]
+This major update introduces a complete economic foundation with material standardization, dynamic markets, and customer contracts.
 
-#### **💰 NEW: Dynamic Market System**
-- **Procedural Suppliers**: "Titan Mining Corp", "Battlefield Salvage LLC" 
-- **Market Dynamics**: Prices fluctuate based on supply/demand simulation
-- **Purchase Orders**: Buy materials with delivery timers
-- **Player Sales**: List products for sale at custom prices
+#### **🏗️ Material Standardization System**
+- **✨ Unified Item Types**: Replaced 50+ separate item variants with 18 base items + tags
+- **🏷️ Tag-Based Modifications**: 16 tags including [damaged], [forged], [military-grade], [titanium]
+- **📊 Quality System**: 0-100% quality scale with tag-based modifiers and caps
+- **📦 Smart Inventory**: Items grouped by category with expandable tags and quality display
+- **⚙️ Manufacturing Integration**: All production methods now output tagged items
+- **🔄 Legacy Migration**: Seamless conversion from old storage format
 
-#### **📋 NEW: Contract System**
-- **Customer Orders**: Procedurally generated contracts with requirements
-- **Quality Standards**: Contracts specify minimum acceptable quality
-- **Deadline Pressure**: Time limits with early delivery bonuses
-- **Automatic Fulfillment**: Smart matching of inventory to contract specs
+#### **💰 Dynamic Market System**
+- **🏭 Procedural Suppliers**: Dynamic generation of vendors like "Titan Mining Corp", "Battlefield Salvage LLC"
+- **📈 Market Forces**: Price fluctuations based on supply/demand simulation  
+- **🚚 Purchase Orders**: Buy materials with realistic delivery timers (1-7 days)
+- **💳 Player Sales**: List manufactured products for sale with custom pricing
+- **📊 Quality Integration**: Materials come with quality tags affecting manufacturing
+- **🔄 Auto-Delivery**: Purchased materials automatically added to inventory
+
+#### **📋 Customer Contract System**
+- **📝 Procedural Contracts**: Dynamic generation of customer orders with varied requirements
+- **⭐ Quality Standards**: Contracts specify minimum acceptable quality levels
+- **⏰ Deadline Pressure**: Time limits with early delivery bonus payments
+- **🎯 Smart Fulfillment**: Automatic matching of inventory items to contract specifications
+- **💰 Payment Processing**: Credits awarded on successful completion
+- **👥 Customer Types**: Rebels, military, corporate security with different needs
+
+#### **🔧 System Integration Improvements**
+- **📦 Inventory Overhaul**: New inventory system handles both legacy and tagged items
+- **⚙️ Manufacturing Updates**: Material consumption uses best quality items first
+- **🎨 UI Enhancements**: Visual tags, quality indicators, and availability checking
+- **🔄 Market Selling**: Updated selling interface to work with new inventory system
+- **📊 Economic Balance**: Profit margins and pricing balanced across all systems
 
 ## 🔧 Version Mv1 - Machine Workspace System (Complete)
 
@@ -200,36 +215,49 @@ Three basic sidearm manufacturing methods available:
 
 ## 🎯 Current Status
 
-**Economic Systems: ✅ COMPLETE**  
+**Materials & Contracts v1: ✅ COMPLETE**  
 **Manufacturing v1: ✅ COMPLETE**
 
-The game now features a complete economic loop:
+### 🏆 Major Milestones Achieved
 
-### 🏭 Manufacturing
-- Machine workspace system with real-time job flow
-- Multiple products with varied manufacturing methods
-- Tag-based quality system for all produced items
-- Visual progress tracking and completion notifications
+#### **Complete Economic Foundation**
+The game now features a fully functional economic loop with all core systems integrated:
 
-### 💰 Markets
-- Dynamic material markets with procedural suppliers
-- Price fluctuations based on supply/demand
-- Player product sales with automatic transactions
-- Delivery timers for purchased materials
+#### **🏭 Manufacturing System** 
+- ✅ Real-time machine workspace with job queues
+- ✅ Multi-product manufacturing with varied methods
+- ✅ Tag-based quality system for all products
+- ✅ Visual progress tracking and notifications
+- ✅ Material constraints and availability checking
 
-### 📋 Contracts  
-- Customer contracts with quality requirements
-- Deadline pressure and early delivery bonuses
-- Automatic fulfillment from tagged inventory
-- Multiple customer types with different needs
+#### **💰 Market System**
+- ✅ Dynamic material markets with procedural suppliers
+- ✅ Supply/demand price simulation
+- ✅ Player product sales with custom pricing
+- ✅ Delivery tracking and automatic inventory updates
+- ✅ Quality-aware material purchasing
 
-### 📦 Inventory
-- Unified item system with tags and quality
-- Smart material consumption (best quality first)
-- Expandable category display in UI
-- Seamless legacy system migration
+#### **📋 Contract System**
+- ✅ Procedural customer contract generation
+- ✅ Quality requirements and deadline pressure
+- ✅ Automatic fulfillment from tagged inventory
+- ✅ Multiple customer segments with unique needs
+- ✅ Early delivery bonuses and payment processing
 
-The game is ready for the next development pass focusing on supply contracts and reputation systems.
+#### **📦 Inventory & Materials**
+- ✅ Unified tag-based item system (18 base items + 16 tags)
+- ✅ Quality-based material consumption
+- ✅ Smart inventory grouping and display
+- ✅ Legacy migration system
+- ✅ Market integration for selling products
+
+### 🚀 Ready for Next Development Arc
+
+The core game loop of **Acquire → Manufacture → Sell** is fully functional. Next development will focus on:
+
+1. **Supply Contracts**: Recurring material delivery agreements
+2. **Reputation System**: Customer relationships affecting available contracts  
+3. **Research & Development**: Technology trees and equipment upgrades
 
 ## 🔮 Vision
 
