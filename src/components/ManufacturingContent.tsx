@@ -17,15 +17,8 @@ export function ManufacturingContent() {
   const availableProducts = getAllProductIds()
   const garage = facilities[0] // Our starting garage
   
-  // Real-time update loop
-  useEffect(() => {
-    const interval = setInterval(() => {
-      processCompletedProduction()
-      processMultiStepProduction()
-    }, 1000) // Check every second
-    
-    return () => clearInterval(interval)
-  }, [processCompletedProduction, processMultiStepProduction])
+  // Legacy production processing is now handled by main game clock in App.tsx
+  // This component only displays the UI state
 
   const handleStartProduction = (productId: string) => {
     if (garage) {

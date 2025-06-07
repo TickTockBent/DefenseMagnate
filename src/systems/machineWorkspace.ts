@@ -347,6 +347,9 @@ export class MachineWorkspaceManager {
     // Step 1: Process machines that are currently working
     for (const [equipmentId, machine] of workspace.machines) {
       if (machine.currentJob && machine.currentProgress) {
+        // Update lastUpdateTime for real-time interpolation
+        machine.currentProgress.lastUpdateTime = Date.now();
+        
         // Update job progress using game time
         const elapsed = this.currentGameTime.totalGameHours - machine.currentProgress.startTime;
         const duration = machine.currentProgress.estimatedCompletion - machine.currentProgress.startTime;
@@ -442,7 +445,8 @@ export class MachineWorkspaceManager {
     machine.currentProgress = {
       stepIndex: job.currentOperationIndex,
       startTime: this.currentGameTime.totalGameHours,
-      estimatedCompletion: this.currentGameTime.totalGameHours + durationInGameHours
+      estimatedCompletion: this.currentGameTime.totalGameHours + durationInGameHours,
+      lastUpdateTime: Date.now()
     };
     
     // Consume materials if needed
