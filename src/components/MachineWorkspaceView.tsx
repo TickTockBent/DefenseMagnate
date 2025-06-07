@@ -8,6 +8,14 @@ import { useState, useEffect } from 'react';
 import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
 import { JobState } from '../constants/enums';
 
+// Helper function to format product names for display
+function formatProductName(productId: string): string {
+  return productId
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 interface MachineCardProps {
   equipment: EquipmentInstance;
   definition: Equipment;
@@ -109,27 +117,35 @@ function MachineCard({ equipment, definition, slot, currentTime }: MachineCardPr
       
       <div className="mb-2">
         <h3 className="text-teal-400 font-bold text-sm">{definition.name}</h3>
-        <span className="text-xs text-gray-500">ID: {equipment.id.slice(-6)}</span>
+        <span className="text-xs text-gray-500">Condition: {equipment.condition}%</span>
       </div>
       
-      {slot.currentJob ? (
-        <div>
-          <div className="text-xs text-white mb-1">
-            Job #{slot.currentJob.id.slice(-6)}
-          </div>
-          <div className="text-xs text-gray-300 mb-1">
-            {slot.currentJob.method.operations[slot.currentJob.currentOperationIndex]?.name}
-          </div>
-          <div className="mb-1">
-            <div className="text-teal-400 text-xs">{getProgressBar(getProgress())}</div>
-            <div className="text-gray-400 text-xs">{Math.floor(getProgress() * 100)}% - {getTimeRemaining()}</div>
-          </div>
-        </div>
-      ) : (
-        <div className="text-gray-500 text-xs">
-          <div className="mb-1">IDLE</div>
-        </div>
-      )}
+      {/* Job Status - consistent height layout */}
+      <div className="h-16 flex flex-col justify-between">
+        {slot.currentJob ? (
+          <>
+            <div className="text-xs text-white mb-1">
+              Making: {formatProductName(slot.currentJob.productId)}
+            </div>
+            <div className="text-xs text-gray-300 mb-1">
+              {slot.currentJob.method.operations[slot.currentJob.currentOperationIndex]?.name}
+            </div>
+            <div>
+              <div className="text-teal-400 text-xs">{getProgressBar(getProgress())}</div>
+              <div className="text-gray-400 text-xs">{Math.floor(getProgress() * 100)}% - {getTimeRemaining()}</div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-xs text-gray-500 mb-1">IDLE</div>
+            <div className="text-xs text-gray-600 mb-1">Waiting for work</div>
+            <div>
+              <div className="text-gray-700 text-xs">░░░░░░░░░░</div>
+              <div className="text-gray-600 text-xs">Ready</div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -152,7 +168,7 @@ function JobFlowDisplay({ jobs }: JobFlowDisplayProps) {
         activeJobs.map(job => (
           <div key={job.id} className="mb-3 last:mb-0">
             <div className="text-sm text-white mb-1">
-              JOB #{job.id.slice(-6)}: {job.productId} ({job.method.name})
+              {formatProductName(job.productId)} ({job.method.name})
             </div>
             
             <div className="flex space-x-2 text-xs">
@@ -211,7 +227,7 @@ function JobQueue({ workspace }: JobQueueProps) {
               <div key={job.id} className="text-xs border-l-2 border-gray-600 pl-2">
                 <div className="flex justify-between items-center">
                   <span className="text-white">
-                    #{job.id.slice(-6)}: {job.productId} ({job.method.name})
+                    {formatProductName(job.productId)} ({job.method.name})
                   </span>
                   {job.rushOrder && (
                     <span className="text-red-400 font-bold">RUSH</span>
@@ -236,8 +252,17 @@ interface ProductionInterfaceProps {
 function ProductionInterface({ facility }: ProductionInterfaceProps) {
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [showMethodDetails, setShowMethodDetails] = useState<string | null>(null);
+  const [startingJob, setStartingJob] = useState<string | null>(null);
   const startMachineJob = useGameStore(state => state.startMachineJob);
   const workspace = useGameStore(state => state.machineWorkspace);
+  
+  const handleStartJob = (facilityId: string, productId: string, methodId: string, quantity: number) => {
+    // Show immediate feedback for just this method
+    setStartingJob(methodId);
+    startMachineJob(facilityId, productId, methodId, quantity);
+    // Clear the feedback after a short delay
+    setTimeout(() => setStartingJob(null), 300);
+  };
 
   // Available products (expand this as more products are added)
   const availableProducts = [
@@ -293,10 +318,14 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                           Details
                         </button>
                         <button
-                          onClick={() => startMachineJob(facility.id, selectedProduct!, method.id, 1)}
-                          className="bg-teal-800 hover:bg-teal-700 text-teal-100 px-3 py-1 text-xs border border-teal-600"
+                          onClick={() => handleStartJob(facility.id, selectedProduct!, method.id, 1)}
+                          className={`px-3 py-1 text-xs border transition-colors ${
+                            startingJob === method.id 
+                              ? 'bg-green-700 border-green-500 text-green-100' 
+                              : 'bg-teal-800 hover:bg-teal-700 text-teal-100 border-teal-600'
+                          }`}
                         >
-                          Start
+                          {startingJob === method.id ? 'Started!' : 'Start'}
                         </button>
                       </div>
                     </div>
@@ -395,12 +424,14 @@ function JobCompletionNotifications() {
 }
 
 export function MachineWorkspaceView() {
-  const facilities = useGameStore(state => state.facilities);
-  const selectedFacilityId = useGameStore(state => state.selectedFacilityId);
-  const equipmentDatabase = useGameStore(state => state.equipmentDatabase);
-  const workspace = useGameStore(state => state.machineWorkspace);
-  const gameTime = useGameStore(state => state.gameTime);
-  const startMachineJob = useGameStore(state => state.startMachineJob);
+  const { 
+    facilities, 
+    selectedFacilityId, 
+    equipmentDatabase, 
+    machineWorkspace: workspace, 
+    gameTime, 
+    startMachineJob 
+  } = useGameStore();
   
   const facility = facilities.find(f => f.id === selectedFacilityId);
   
@@ -450,9 +481,6 @@ export function MachineWorkspaceView() {
         </div>
       </div>
       
-      {/* Job flow visualization */}
-      <JobFlowDisplay jobs={allJobs.filter(j => j.state === JobState.IN_PROGRESS)} />
-      
       {/* Machine cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {facility.equipment.map(eq => {
@@ -475,6 +503,9 @@ export function MachineWorkspaceView() {
       
       {/* Production interface */}
       <ProductionInterface facility={facility} />
+      
+      {/* Job flow visualization */}
+      <JobFlowDisplay jobs={allJobs.filter(j => j.state === JobState.IN_PROGRESS)} />
       
       {/* Summary stats */}
       <div className="mt-4 pt-4 border-t border-gray-700 text-xs text-gray-500">

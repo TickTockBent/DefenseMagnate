@@ -421,25 +421,25 @@ export const useGameStore = create<GameState>((set, get) => ({
     const facility = state.facilities.find(f => f.id === facilityId);
     if (!facility) return;
     
-    // Initialize workspace if needed
-    if (!state.machineWorkspace || state.machineWorkspace.facilityId !== facilityId) {
-      state.machineWorkspaceManager.setFacility(facility);
-      state.machineWorkspaceManager.setGameTime(state.gameTime);
-      const workspace = state.machineWorkspaceManager.initializeWorkspace(facility);
-      set({ machineWorkspace: workspace });
-    }
-    
-    // Get the method from available products
+    // Get the method from available products first (fail fast)
     let method = basicSidearmMethods.find(m => m.id === methodId);
     if (!method) {
       method = tacticalKnifeMethods.find(m => m.id === methodId);
     }
     if (!method) return;
     
-    // Set current game time before adding job
-    state.machineWorkspaceManager.setGameTime(state.gameTime);
+    // Ensure workspace is ready - but don't wait for state update
+    let workspace = state.machineWorkspace;
+    if (!workspace || workspace.facilityId !== facilityId) {
+      state.machineWorkspaceManager.setFacility(facility);
+      state.machineWorkspaceManager.setGameTime(state.gameTime);
+      workspace = state.machineWorkspaceManager.initializeWorkspace(facility);
+    } else {
+      // Just update game time for existing workspace
+      state.machineWorkspaceManager.setGameTime(state.gameTime);
+    }
     
-    // Add the job
+    // Add the job immediately
     const priority = rushOrder ? JobPriority.RUSH : JobPriority.NORMAL;
     state.machineWorkspaceManager.addJob(
       facilityId,
@@ -450,7 +450,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       rushOrder
     );
     
-    // Update the workspace in state
+    // Single state update with the current workspace
     set({ machineWorkspace: state.machineWorkspaceManager.getWorkspace(facilityId) });
   },
   
