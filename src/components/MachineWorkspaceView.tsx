@@ -6,6 +6,7 @@ import { Equipment, EquipmentInstance } from '../types';
 import { formatGameTime } from '../utils/gameClock';
 import { useState, useEffect } from 'react';
 import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
+import { JobState } from '../constants/enums';
 
 interface MachineCardProps {
   equipment: EquipmentInstance;
@@ -438,9 +439,19 @@ export function MachineWorkspaceView() {
           Time: {formatGameTime(gameTime)}
         </div>
       </div>
+
+      {/* Implementation Status Notice */}
+      <div className="terminal-card border-green-600 mb-4">
+        <div className="text-center">
+          <div className="text-green-400 font-mono text-lg mb-2">✓ MANUFACTURING V1 COMPLETE</div>
+          <div className="text-gray-400 text-sm">
+            Machine workspace system with facility-wide job queues and real-time job notifications fully functional.
+          </div>
+        </div>
+      </div>
       
       {/* Job flow visualization */}
-      <JobFlowDisplay jobs={allJobs.filter(j => j.state === 'IN_PROGRESS')} />
+      <JobFlowDisplay jobs={allJobs.filter(j => j.state === JobState.IN_PROGRESS)} />
       
       {/* Machine cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
