@@ -93,9 +93,7 @@ export const latheManual = createEquipment({
   tier: EquipmentTier.BASIC,
   tags: [
     { category: TagCategory.TURNING, value: 8, unit: '%', consumable: true },
-    { category: TagCategory.MANUAL, value: true },
-    { category: TagCategory.SURFACE, value: 2, unit: 'm²' },
-    { category: TagCategory.HOLDING, value: true }
+    { category: TagCategory.MANUAL, value: true }
   ],
   footprint: 3,
   purchaseCost: 1500,
@@ -129,9 +127,7 @@ export const millManual = createEquipment({
   tags: [
     { category: TagCategory.MILLING, value: 10, unit: '%', consumable: true },
     { category: TagCategory.DRILLING, value: 15, unit: '%', consumable: true },
-    { category: TagCategory.MANUAL, value: true },
-    { category: TagCategory.SURFACE, value: 1.5, unit: 'm²' },
-    { category: TagCategory.HOLDING, value: true }
+    { category: TagCategory.MANUAL, value: true }
   ],
   footprint: 3,
   purchaseCost: 2000,
@@ -343,8 +339,12 @@ export const equipmentDatabase = new Map<string, Equipment>([
 export const starterEquipmentSets = {
   garage: [
     handToolsBasic.id,
+    handToolsPrecision.id,    // For precision work
     workbenchBasic.id,
-    shelvingBasic.id
+    shelvingBasic.id,
+    latheManual.id,           // For turning operations
+    millManual.id,            // For milling operations
+    measuringToolsBasic.id    // For quality control
   ],
   workshop: [
     handToolsBasic.id,

@@ -117,8 +117,8 @@ export function createGarage(name: string): Facility {
     },
     
     upgrades: [],
-    equipment: [],
-    equipment_capacity: new Map<TagCategory, number>(),
+    equipment: [], // Will be populated by game store
+    equipment_capacity: new Map<TagCategory, number>(), // Will be calculated from equipment
     
     active_production: [{
       id: 'line-1',
@@ -128,7 +128,22 @@ export function createGarage(name: string): Facility {
       materials_loaded: false,
       labor_assigned: 0,
     }],
-    current_storage: {},
+    current_storage: {
+      // Starter materials for testing - enough for 2-3 jobs each
+      
+      // For Forge method (steel + plastic) - 3 jobs worth
+      steel: 5,
+      plastic: 2,
+      
+      // For Restore method (damaged weapons + spares) - 3 jobs worth  
+      damaged_basic_sidearm: 3,
+      low_tech_spares: 20, // Used by both restore and cobble methods
+      
+      // Additional useful materials
+      aluminum: 2,
+      basic_electronics: 3,
+      machined_parts: 5
+    },
     pending_upgrades: [],
     
     condition: 'operational',

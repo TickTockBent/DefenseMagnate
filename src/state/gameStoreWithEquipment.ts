@@ -6,16 +6,21 @@ import {
   ProductionLine,
   Equipment, 
   EquipmentInstance,
+  EquipmentStatus,
   ProductionJob, 
   ProductionQueue,
   JobPriority,
   ManufacturingMethod,
+  MachineWorkspace,
+  MachineBasedMethod,
   createGarage,
   aggregateEquipmentTags
 } from '../types';
 import { ProductionScheduler } from '../systems/productionScheduler';
+import { MachineWorkspaceManager } from '../systems/machineWorkspace';
 import { equipmentDatabase, starterEquipmentSets } from '../data/equipment';
-import { getProductData } from '../data/productHelpers';
+import { productsWithMethods } from '../data/productsWithTags';
+import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
 import { createGameTime, updateGameTime, type GameTime } from '../utils/gameClock';
 
 // Add elapsed property to GameTime for compatibility
@@ -43,14 +48,22 @@ interface Research {
   prerequisites: string[];
 }
 
+interface JobCompletionNotification {
+  id: string;
+  jobId: string;
+  productId: string;
+  methodName: string;
+  quantity: number;
+  timestamp: number;
+}
+
 interface GameState {
   // Core game state
   gameTime: ExtendedGameTime;
   credits: number;
   
-  // Resources & Materials
+  // Resources (global game resources like credits, reputation, etc.)
   resources: Record<string, number>;
-  materials: Record<string, number>; // Material inventory
   
   // Research
   research: {
@@ -65,8 +78,12 @@ interface GameState {
   // Equipment database
   equipmentDatabase: Map<string, Equipment>;
   
-  // Production scheduling
+  // Production scheduling (legacy - to be removed)
   productionScheduler: ProductionScheduler;
+  
+  // New machine workspace system
+  machineWorkspaceManager: MachineWorkspaceManager;
+  machineWorkspace?: MachineWorkspace;
   
   // Legacy production (to be migrated)
   productionLines: ProductionLine[];
@@ -78,6 +95,9 @@ interface GameState {
   // UI State
   activeTab: 'research' | 'manufacturing' | 'equipment' | 'contracts' | 'supply';
   selectedFacilityId: string | null;
+  
+  // Notifications
+  jobCompletionNotifications: JobCompletionNotification[];
   
   // Actions
   setActiveTab: (tab: GameState['activeTab']) => void;
@@ -94,7 +114,6 @@ interface GameState {
   
   // Resource actions
   updateResource: (resource: string, amount: number) => void;
-  updateMaterial: (material: string, amount: number) => void;
   
   // Facility actions
   updateFacility: (facilityId: string, updates: Partial<Facility>) => void;
@@ -116,8 +135,21 @@ interface GameState {
   cancelProductionJob: (facilityId: string, jobId: string) => void;
   updateProductionPriority: (facilityId: string, jobId: string, priority: JobPriority) => void;
   
+  // Machine workspace actions
+  startMachineJob: (
+    facilityId: string,
+    productId: string,
+    methodId: string,
+    quantity: number,
+    rushOrder?: boolean
+  ) => void;
+  
   // System update
   updateProduction: () => void;
+  
+  // Notification actions
+  addJobCompletionNotification: (notification: Omit<JobCompletionNotification, 'id' | 'timestamp'>) => void;
+  dismissNotification: (id: string) => void;
 }
 
 // Helper to create initial equipment instances
@@ -129,6 +161,7 @@ function createEquipmentInstance(equipmentId: string, facilityId: string): Equip
     condition: 100,
     lastMaintenance: 0,
     totalOperatingHours: 0,
+    status: EquipmentStatus.AVAILABLE,
     utilizationHistory: []
   };
 }
@@ -139,12 +172,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   gameTime: { ...createGameTime(), elapsed: 0, deltaTime: 0 },
   credits: 10000,
   resources: {},
-  materials: {
-    steel: 20,
-    plastic: 15,
-    scrap_metal: 50,
-    spare_parts: 10
-  },
   
   research: {
     current: null,
@@ -155,6 +182,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   facilities: [],
   equipmentDatabase: equipmentDatabase,
   productionScheduler: new ProductionScheduler(equipmentDatabase),
+  machineWorkspaceManager: new MachineWorkspaceManager(equipmentDatabase),
   
   productionLines: [],
   completedProducts: {},
@@ -162,6 +190,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   
   activeTab: 'manufacturing',
   selectedFacilityId: null,
+  jobCompletionNotifications: [],
   
   // Actions
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -193,10 +222,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   
   updateResource: (resource, amount) => set(state => ({
     resources: { ...state.resources, [resource]: (state.resources[resource] || 0) + amount }
-  })),
-  
-  updateMaterial: (material, amount) => set(state => ({
-    materials: { ...state.materials, [material]: (state.materials[material] || 0) + amount }
   })),
   
   updateFacility: (facilityId, updates) => set(state => ({
@@ -331,24 +356,26 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     
     // Get product and method data
-    const productData = getProductData(productId);
+    const productData = productsWithMethods[productId as keyof typeof productsWithMethods];
     if (!productData) return;
     
     const method = productData.manufacturing_methods?.find(m => m.id === methodId);
     if (!method) return;
     
-    // Create the job
-    const job = state.productionScheduler.addJob(facility.production_queue, {
-      facilityId,
-      productId,
-      method,
-      quantity,
-      priority,
-      createdAt: state.gameTime.elapsed,
-      currentStepIndex: 0,
-      steps: method.steps,
-      contractId
-    });
+    // Create multiple single jobs for multi-quantity orders
+    for (let i = 0; i < quantity; i++) {
+      const job = state.productionScheduler.addJob(facility.production_queue, {
+        facilityId,
+        productId,
+        method,
+        quantity: 1, // Each job is for a single unit
+        priority,
+        createdAt: state.gameTime.elapsed,
+        currentStepIndex: 0,
+        steps: method.steps,
+        contractId
+      });
+    }
     
     // Update facility
     set(state => ({
@@ -366,6 +393,45 @@ export const useGameStore = create<GameState>((set, get) => ({
     // Implementation here
   },
   
+  // New machine workspace system
+  startMachineJob: (facilityId, productId, methodId, quantity = 1, rushOrder = false) => {
+    const state = get();
+    const facility = state.facilities.find(f => f.id === facilityId);
+    if (!facility) return;
+    
+    // Initialize workspace if needed
+    if (!state.machineWorkspace || state.machineWorkspace.facilityId !== facilityId) {
+      state.machineWorkspaceManager.setFacility(facility);
+      state.machineWorkspaceManager.setGameTime(state.gameTime);
+      const workspace = state.machineWorkspaceManager.initializeWorkspace(facility);
+      set({ machineWorkspace: workspace });
+    }
+    
+    // Get the method from available products
+    let method = basicSidearmMethods.find(m => m.id === methodId);
+    if (!method) {
+      method = tacticalKnifeMethods.find(m => m.id === methodId);
+    }
+    if (!method) return;
+    
+    // Set current game time before adding job
+    state.machineWorkspaceManager.setGameTime(state.gameTime);
+    
+    // Add the job
+    const priority = rushOrder ? JobPriority.RUSH : JobPriority.NORMAL;
+    state.machineWorkspaceManager.addJob(
+      facilityId,
+      productId,
+      method,
+      quantity,
+      priority,
+      rushOrder
+    );
+    
+    // Update the workspace in state
+    set({ machineWorkspace: state.machineWorkspaceManager.getWorkspace(facilityId) });
+  },
+  
   // Main production update loop
   updateProduction: () => {
     const state = get();
@@ -373,6 +439,18 @@ export const useGameStore = create<GameState>((set, get) => ({
     
     if (state.gameTime.isPaused) return;
     
+    // Update machine workspace system
+    if (state.machineWorkspace && state.selectedFacilityId) {
+      const facility = state.facilities.find(f => f.id === state.selectedFacilityId);
+      if (facility) {
+        state.machineWorkspaceManager.setFacility(facility);
+        state.machineWorkspaceManager.setGameTime(state.gameTime);
+        state.machineWorkspaceManager.updateAllWorkspaces(deltaTime);
+        set({ machineWorkspace: state.machineWorkspaceManager.getWorkspace(state.selectedFacilityId) });
+      }
+    }
+    
+    // Legacy production system (to be removed)
     set(state => {
       const updatedFacilities = state.facilities.map(facility => {
         if (!facility.production_queue) return facility;
@@ -412,7 +490,20 @@ export const useGameStore = create<GameState>((set, get) => ({
       
       return { facilities: updatedFacilities };
     });
-  }
+  },
+  
+  // Notification management
+  addJobCompletionNotification: (notification) => set(state => ({
+    jobCompletionNotifications: [...state.jobCompletionNotifications, {
+      ...notification,
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now()
+    }]
+  })),
+  
+  dismissNotification: (id) => set(state => ({
+    jobCompletionNotifications: state.jobCompletionNotifications.filter(n => n.id !== id)
+  }))
 }));
 
 // Initialize first facility with starter equipment
@@ -429,7 +520,48 @@ initialFacility.used_floor_space = initialFacility.equipment.reduce((sum, eq) =>
   return sum + (def?.footprint || 0);
 }, 0);
 
+// Get the initial materials from the store definition
+const initialMaterials = {
+  // For Forge method (steel + plastic) - 3 jobs worth
+  steel: 20,
+  plastic: 15,
+  
+  // For Restore method (damaged weapons + spares) - 3 jobs worth  
+  damaged_basic_sidearm: 3,
+  low_tech_spares: 20,
+  
+  // For tactical knife methods
+  damaged_tactical_knife: 2,
+  dull_tactical_knife: 4,
+  
+  // Additional useful materials
+  aluminum: 2,
+  basic_electronics: 3,
+  machined_parts: 5
+};
+
+// Sync facility storage with game store materials
+initialFacility.current_storage = { ...initialMaterials };
+
+// Initialize the machine workspace for the facility
+const machineManager = new MachineWorkspaceManager(equipmentDatabase);
+machineManager.setFacility(initialFacility);
+const initialWorkspace = machineManager.initializeWorkspace(initialFacility);
+
+// Set up job completion callback
+machineManager.setJobCompleteCallback((job) => {
+  const store = useGameStore.getState();
+  store.addJobCompletionNotification({
+    jobId: job.id,
+    productId: job.productId,
+    methodName: job.method.name,
+    quantity: job.quantity
+  });
+});
+
 useGameStore.setState({ 
   facilities: [initialFacility],
-  selectedFacilityId: initialFacility.id
+  selectedFacilityId: initialFacility.id,
+  machineWorkspaceManager: machineManager,
+  machineWorkspace: initialWorkspace
 });

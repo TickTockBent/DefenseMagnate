@@ -9,6 +9,8 @@ import {
   compareJobPriority,
   calculateStepDuration,
   Equipment, 
+  EquipmentInstance,
+  EquipmentStatus,
   TagCategory,
   aggregateEquipmentTags,
   meetsTagRequirements,
@@ -16,12 +18,206 @@ import {
   ManufacturingStep,
   Facility
 } from '../types';
+import { TIME_SCALE } from '../utils/gameClock';
 
 export class ProductionScheduler {
   private equipmentDefinitions: Map<string, Equipment>;
   
   constructor(equipmentDatabase: Map<string, Equipment>) {
     this.equipmentDefinitions = equipmentDatabase;
+  }
+  
+  // Equipment Reservation System
+  
+  // Try to reserve equipment for a job step using capacity-based reservation
+  private tryReserveEquipment(
+    facility: Facility,
+    step: ManufacturingStep,
+    jobId: string
+  ): EquipmentInstance[] | null {
+    console.log(`\nReserving equipment for job ${jobId}, step: ${step.name}`);
+    
+    // Calculate currently available capacity considering active reservations
+    const availableCapacity = this.calculateAvailableCapacity(facility);
+    
+    // Check if we can satisfy all requirements with available capacity
+    for (const req of step.required_tags) {
+      const available = availableCapacity.get(req.category) || 0;
+      
+      if (typeof req.minimum === 'boolean') {
+        if (req.minimum && available === 0) {
+          console.log(`❌ Cannot satisfy ${req.category} (boolean requirement)`);
+          return null;
+        }
+      } else {
+        if (available < req.minimum) {
+          console.log(`❌ Cannot satisfy ${req.category}: need ${req.minimum}, have ${available}`);
+          return null;
+        }
+      }
+    }
+    
+    // If we can satisfy all requirements, reserve the specific equipment we need
+    const reservedEquipment: EquipmentInstance[] = [];
+    const reservedCapacity = new Map<string, number>(); // Equipment ID -> reserved capacity amount
+    
+    for (const req of step.required_tags) {
+      // Find the best equipment to provide this requirement
+      const suitableEquipment = facility.equipment
+        .filter(eq => eq.status === EquipmentStatus.AVAILABLE || (eq.status === EquipmentStatus.RESERVED && eq.reservedBy === jobId))
+        .filter(eq => {
+          const def = this.equipmentDefinitions.get(eq.equipmentId);
+          if (!def) return false;
+          
+          return def.tags.some(tag => {
+            if (tag.category !== req.category) return false;
+            
+            if (typeof req.minimum === 'boolean') {
+              return tag.value === true;
+            } else {
+              return typeof tag.value === 'number' && tag.value >= req.minimum;
+            }
+          });
+        })
+        .sort((a, b) => {
+          // Prefer equipment that's already reserved by this job
+          if (a.reservedBy === jobId && b.reservedBy !== jobId) return -1;
+          if (b.reservedBy === jobId && a.reservedBy !== jobId) return 1;
+          
+          // Then prefer equipment that provides the exact amount needed (minimize waste)
+          const defA = this.equipmentDefinitions.get(a.equipmentId)!;
+          const defB = this.equipmentDefinitions.get(b.equipmentId)!;
+          
+          const tagA = defA.tags.find(t => t.category === req.category)!;
+          const tagB = defB.tags.find(t => t.category === req.category)!;
+          
+          if (typeof req.minimum === 'number' && typeof tagA.value === 'number' && typeof tagB.value === 'number') {
+            const wasteA = tagA.value - req.minimum;
+            const wasteB = tagB.value - req.minimum;
+            return wasteA - wasteB;
+          }
+          
+          return 0;
+        });
+      
+      if (suitableEquipment.length === 0) {
+        console.log(`❌ No suitable equipment for ${req.category}`);
+        this.releaseReservedEquipment(facility, reservedEquipment);
+        return null;
+      }
+      
+      const equipment = suitableEquipment[0];
+      
+      // Reserve this equipment if not already reserved by this job
+      if (!reservedEquipment.includes(equipment)) {
+        equipment.status = EquipmentStatus.RESERVED;
+        equipment.reservedBy = jobId;
+        reservedEquipment.push(equipment);
+        console.log(`✓ Reserved ${equipment.equipmentId} for ${req.category}`);
+      }
+    }
+    
+    return reservedEquipment;
+  }
+  
+  // Calculate available capacity considering current reservations and usage
+  private calculateAvailableCapacity(facility: Facility): Map<TagCategory, number> {
+    const capacity = new Map<TagCategory, number>();
+    
+    // First, get base capacity from ALL equipment (not just available)
+    for (const equipment of facility.equipment) {
+      const def = this.equipmentDefinitions.get(equipment.equipmentId);
+      if (!def) continue;
+      
+      const conditionModifier = equipment.condition / 100;
+      
+      for (const tag of def.tags) {
+        if (typeof tag.value === 'number') {
+          const current = capacity.get(tag.category) || 0;
+          const adjustedValue = tag.value * conditionModifier;
+          
+          // For consumable tags, add to total capacity pool
+          // For non-consumable tags, take the maximum from any single piece
+          if (tag.consumable) {
+            capacity.set(tag.category, current + adjustedValue);
+          } else {
+            capacity.set(tag.category, Math.max(current, adjustedValue));
+          }
+        } else if (typeof tag.value === 'boolean' && tag.value) {
+          capacity.set(tag.category, 1);
+        }
+      }
+    }
+    
+    // Now subtract capacity that's being used by reserved/in-use equipment
+    for (const equipment of facility.equipment) {
+      if (equipment.status === EquipmentStatus.RESERVED || equipment.status === EquipmentStatus.IN_USE) {
+        const def = this.equipmentDefinitions.get(equipment.equipmentId);
+        if (!def) continue;
+        
+        const conditionModifier = equipment.condition / 100;
+        
+        for (const tag of def.tags) {
+          if (typeof tag.value === 'number') {
+            const adjustedValue = tag.value * conditionModifier;
+            
+            // For non-consumable tags, subtract the entire capacity when equipment is reserved
+            // For consumable tags, we'd need to track actual usage (not implemented yet)
+            if (!tag.consumable) {
+              const current = capacity.get(tag.category) || 0;
+              capacity.set(tag.category, Math.max(0, current - adjustedValue));
+            }
+          } else if (typeof tag.value === 'boolean' && tag.value) {
+            // Boolean capabilities are unavailable when equipment is reserved
+            capacity.set(tag.category, 0);
+          }
+        }
+      }
+    }
+    
+    console.log(`Available capacity:`, Object.fromEntries(capacity));
+    return capacity;
+  }
+  
+  // Release reserved equipment back to available
+  private releaseReservedEquipment(facility: Facility, equipment: EquipmentInstance[]): void {
+    for (const eq of equipment) {
+      eq.status = EquipmentStatus.AVAILABLE;
+      eq.reservedBy = undefined;
+      eq.currentlyUsedBy = undefined;
+    }
+  }
+  
+  // Start using reserved equipment
+  private startUsingEquipment(reservedEquipment: EquipmentInstance[], jobId: string): void {
+    for (const eq of reservedEquipment) {
+      eq.status = EquipmentStatus.IN_USE;
+      eq.currentlyUsedBy = [jobId];
+    }
+  }
+  
+  // Complete using equipment and return to available
+  private completeUsingEquipment(facility: Facility, jobId: string): void {
+    console.log(`\nReleasing equipment for job ${jobId}:`);
+    let releasedAny = false;
+    
+    for (const eq of facility.equipment) {
+      if (eq.currentlyUsedBy?.includes(jobId)) {
+        console.log(`  ✓ Releasing ${eq.equipmentId} (was ${eq.status})`);
+        eq.status = EquipmentStatus.AVAILABLE;
+        eq.reservedBy = undefined;
+        eq.currentlyUsedBy = undefined;
+        releasedAny = true;
+      }
+    }
+    
+    if (!releasedAny) {
+      console.log(`  ⚠️ No equipment found to release for job ${jobId}`);
+      // Show current equipment status for debugging
+      for (const eq of facility.equipment) {
+        console.log(`    ${eq.equipmentId}: ${eq.status}, usedBy: ${eq.currentlyUsedBy}, reservedBy: ${eq.reservedBy}`);
+      }
+    }
   }
   
   // Initialize production queue for a facility
@@ -123,8 +319,9 @@ export class ProductionScheduler {
     const timeMultiplier = this.calculateTimeMultiplier(stepProgress, currentStep, facility);
     const actualDuration = baseDuration * timeMultiplier;
     
-    // Update progress
-    const progressIncrement = (deltaTime / actualDuration) * 100;
+    // Update progress (convert deltaTime from ms to game hours)
+    const deltaTimeHours = deltaTime / TIME_SCALE.MS_PER_GAME_HOUR; // Convert ms to game hours
+    const progressIncrement = (deltaTimeHours / actualDuration) * 100;
     stepProgress.progress = Math.min(100, stepProgress.progress + progressIncrement);
     
     // Check if step is complete
@@ -177,17 +374,20 @@ export class ProductionScheduler {
     // Mark step complete
     stepProgress.state = StepState.COMPLETED;
     
-    // Release equipment
-    this.releaseStepEquipment(job, queue, stepProgress);
+    // Release equipment using new system
+    console.log(`Completing step ${job.currentStepIndex} for job ${job.id} - releasing equipment`);
+    this.completeUsingEquipment(facility, job.id);
     
     // Move to next step
     job.currentStepIndex++;
     
     if (job.currentStepIndex >= job.steps.length) {
       // Job complete!
+      console.log(`Job ${job.id} completed!`);
       this.completeJob(job, queue, facility);
     } else {
       // Set next step to waiting
+      console.log(`Job ${job.id} moving to step ${job.currentStepIndex}`);
       job.stepProgress[job.currentStepIndex].state = StepState.WAITING;
     }
   }
@@ -269,11 +469,15 @@ export class ProductionScheduler {
     for (const job of queue.jobs) {
       if (job.state === JobState.CANCELLED || job.state === JobState.FAILED) continue;
       
-      // Check if job can start
+      // Get fresh copy of available equipment for each job check
+      const freshAvailableEquipment = this.getAvailableEquipment(facility, queue);
+      const freshAvailableMaterials = new Map(Object.entries(facility.current_storage));
+      
+      // Check if job can start - only mark IN_PROGRESS if first step actually starts
       if (job.state === JobState.QUEUED) {
-        const canStart = this.tryStartJob(job, queue, facility, availableEquipment, availableMaterials);
+        const canStart = this.tryStartJob(job, queue, facility, freshAvailableEquipment, freshAvailableMaterials);
         if (canStart) {
-          job.state = JobState.IN_PROGRESS;
+          // Job will be marked IN_PROGRESS in tryStartJob when step actually starts
           job.startedAt = currentTime;
         }
       }
@@ -287,8 +491,8 @@ export class ProductionScheduler {
             job.currentStepIndex, 
             queue, 
             facility, 
-            availableEquipment, 
-            availableMaterials
+            freshAvailableEquipment, 
+            freshAvailableMaterials
           );
           
           if (canStart) {
@@ -309,49 +513,73 @@ export class ProductionScheduler {
     availableMaterials: Map<string, number>
   ): boolean {
     // Check if first step can start
-    return this.tryStartStep(job, 0, queue, facility, availableEquipment, availableMaterials);
+    const canStart = this.tryStartStep(job, 0, queue, facility, availableEquipment, availableMaterials);
+    if (canStart) {
+      // Job transitions to IN_PROGRESS only when first step actually starts
+      job.state = JobState.IN_PROGRESS;
+      job.stepProgress[0].state = StepState.IN_PROGRESS;
+      job.stepProgress[0].startTime = Date.now();
+    }
+    return canStart;
   }
   
-  // Try to start a specific step
+  // Try to start a specific step using equipment reservation system
   private tryStartStep(
     job: ProductionJob,
     stepIndex: number,
     queue: ProductionQueue,
     facility: Facility,
-    availableEquipment: Map<TagCategory, number>,
+    availableEquipment: Map<TagCategory, number>, // Not used anymore
     availableMaterials: Map<string, number>
   ): boolean {
     const step = job.steps[stepIndex];
     const stepProgress = job.stepProgress[stepIndex];
     
-    // Check equipment requirements
-    const equipmentCheck = meetsTagRequirements(availableEquipment, step.required_tags);
-    if (!equipmentCheck.meets) return false;
-    
-    // Check material requirements
+    // Check material requirements first (cheaper check)
+    console.log(`\nChecking materials for job ${job.id} step ${stepIndex}:`);
     for (const mat of step.material_requirements) {
       if (mat.consumed_at_start) {
-        const available = availableMaterials.get(mat.material_id) || 0;
-        if (available < mat.quantity * job.quantity) return false;
+        const available = facility.current_storage[mat.material_id] || 0;
+        const needed = mat.quantity * job.quantity;
+        console.log(`  ${mat.material_id}: need ${needed}, have ${available}`);
+        if (available < needed) {
+          console.log(`  ❌ Insufficient ${mat.material_id}`);
+          return false;
+        }
+      } else {
+        const available = facility.current_storage[mat.material_id] || 0;
+        const needed = mat.quantity * job.quantity;
+        console.log(`  ${mat.material_id}: need ${needed}, have ${available} (not consumed at start)`);
       }
     }
     
-    // Allocate resources
-    this.allocateStepResources(job, step, stepProgress, queue, facility, availableEquipment);
+    // Try to reserve equipment using new reservation system
+    const reservedEquipment = this.tryReserveEquipment(facility, step, job.id);
+    if (!reservedEquipment) {
+      console.log(`Could not reserve equipment for job ${job.id} step ${stepIndex}`);
+      return false;
+    }
+    
+    // Start using the reserved equipment
+    this.startUsingEquipment(reservedEquipment, job.id);
     
     // Consume materials
     for (const mat of step.material_requirements) {
       if (mat.consumed_at_start) {
-        const newAmount = (availableMaterials.get(mat.material_id) || 0) - (mat.quantity * job.quantity);
-        availableMaterials.set(mat.material_id, newAmount);
-        facility.current_storage[mat.material_id] = newAmount;
+        const needed = mat.quantity * job.quantity;
+        const currentAmount = facility.current_storage[mat.material_id] || 0;
+        facility.current_storage[mat.material_id] = currentAmount - needed;
         
         // Track consumed materials
         const consumed = job.consumedMaterials.get(mat.material_id) || 0;
-        job.consumedMaterials.set(mat.material_id, consumed + (mat.quantity * job.quantity));
+        job.consumedMaterials.set(mat.material_id, consumed + needed);
       }
     }
     
+    // Store reserved equipment in step progress for later release
+    stepProgress.allocatedEquipment = reservedEquipment.map(eq => eq.id);
+    
+    console.log(`Job ${job.id} step ${stepIndex} started - reserved equipment: ${reservedEquipment.map(eq => eq.equipmentId).join(', ')}`);
     return true;
   }
   
@@ -369,7 +597,8 @@ export class ProductionScheduler {
     
     // For each required tag, find and allocate equipment
     for (const req of step.required_tags) {
-      if (typeof req.minimum === 'number' && req.consumes) {
+      if (typeof req.minimum === 'number') {
+        const consumeAmount = req.consumes || req.minimum;
         // Find equipment that provides this tag
         for (const equipment of facility.equipment) {
           const def = this.equipmentDefinitions.get(equipment.equipmentId);
@@ -384,11 +613,11 @@ export class ProductionScheduler {
               
               // Track capacity consumption
               const consumed = stepProgress.consumedCapacity!.get(req.category) || 0;
-              stepProgress.consumedCapacity!.set(req.category, consumed + req.consumes);
+              stepProgress.consumedCapacity!.set(req.category, consumed + consumeAmount);
               
               // Update available capacity
               const available = availableEquipment.get(req.category) || 0;
-              availableEquipment.set(req.category, available - req.consumes);
+              availableEquipment.set(req.category, available - consumeAmount);
               
               break;
             }

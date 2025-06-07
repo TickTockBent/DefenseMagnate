@@ -72,11 +72,10 @@ const basicSidearmMethods: ManufacturingMethod[] = [
         'Precision Machining',
         50,
         [
-          { category: TagCategory.TURNING, minimum: 20, optimal: 35 },
-          { category: TagCategory.MILLING, minimum: 15, optimal: 30 },
+          { category: TagCategory.TURNING, minimum: 8, optimal: 35 },
+          { category: TagCategory.MILLING, minimum: 10, optimal: 30 },
           { category: TagCategory.SURFACE, minimum: 2 },
-          { category: TagCategory.HOLDING, minimum: true },
-          { category: TagCategory.POWERED, minimum: true }
+          { category: TagCategory.HOLDING, minimum: true }
         ],
         {
           material_requirements: [
@@ -144,7 +143,7 @@ const basicSidearmMethods: ManufacturingMethod[] = [
         {
           labor_skill: 'skilled_technician',
           material_requirements: [
-            { material_id: 'damaged_sidearm', quantity: 1, consumed_at_start: true }
+            { material_id: 'damaged_basic_sidearm', quantity: 1, consumed_at_start: true }
           ]
         }
       ),
@@ -159,7 +158,7 @@ const basicSidearmMethods: ManufacturingMethod[] = [
         ],
         {
           material_requirements: [
-            { material_id: 'spare_parts', quantity: 0.2, consumed_at_start: true }
+            { material_id: 'low_tech_spares', quantity: 0.2, consumed_at_start: true }
           ],
           labor_skill: 'skilled_technician',
           failure_chance: 0.08,
@@ -199,13 +198,13 @@ const basicSidearmMethods: ManufacturingMethod[] = [
         'Scavenge & Sort Parts',
         30,
         [
-          { category: TagCategory.SURFACE, minimum: 3 },
-          { category: TagCategory.STORAGE, minimum: 5 }
+          { category: TagCategory.SURFACE, minimum: 2 },
+          { category: TagCategory.STORAGE, minimum: 3 }
         ],
         {
           material_requirements: [
-            { material_id: 'scrap_metal', quantity: 2, consumed_at_start: true },
-            { material_id: 'salvaged_components', quantity: 1, consumed_at_start: true }
+            { material_id: 'steel', quantity: 0.5, consumed_at_start: true },
+            { material_id: 'basic_electronics', quantity: 1, consumed_at_start: true }
           ],
           labor_skill: 'unskilled'
         }

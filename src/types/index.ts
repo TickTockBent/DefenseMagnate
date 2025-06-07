@@ -46,6 +46,7 @@ export type {
 
 export {
   EquipmentTier,
+  EquipmentStatus,
   aggregateEquipmentTags,
   meetsTagRequirements,
   getEfficiencyPenalty,
@@ -54,6 +55,9 @@ export {
 
 // Re-export enums and constants for convenience
 export * from '../constants/enums';
+
+// Machine slot system types
+export * from './machineSlot';
 
 // Re-export common utilities
 export * from '../utils/formatters';

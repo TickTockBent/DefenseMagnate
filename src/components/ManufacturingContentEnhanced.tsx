@@ -10,11 +10,12 @@ export function ManufacturingContentEnhanced() {
   const { 
     selectedFacilityId, 
     facilities,
-    materials,
     credits,
     gameTime,
     addProductionJob,
-    equipmentDatabase
+    equipmentDatabase,
+    togglePause,
+    setGameSpeed
   } = useGameStore();
   
   const [selectedProduct, setSelectedProduct] = useState<string>('basic_sidearm');
@@ -74,24 +75,36 @@ export function ManufacturingContentEnhanced() {
     
     // Check each step's requirements
     for (const step of method.steps) {
-      // Check materials
+      // Check materials - use facility storage (real data) not UI materials (stale)
       for (const mat of step.material_requirements) {
-        const available = materials[mat.material_id] || 0;
-        const needed = mat.quantity * quantity;
-        if (available < needed) {
-          reasons.push(`Need ${needed} ${mat.material_id}, have ${available}`);
-          canStart = false;
+        const available = facility.current_storage[mat.material_id] || 0;
+        const neededForAll = mat.quantity * quantity;
+        if (available < neededForAll) {
+          const canMake = Math.floor(available / mat.quantity);
+          if (canMake === 0) {
+            reasons.push(`Need ${mat.quantity} ${mat.material_id}, have ${available}`);
+            canStart = false;
+          } else {
+            reasons.push(`Only enough materials for ${canMake} of ${quantity} units`);
+            canStart = false; // Don't allow partial starts for now
+          }
         }
       }
       
-      // Check equipment
-      const equipCheck = meetsTagRequirements(availableCapacity, step.required_tags);
-      if (!equipCheck.meets) {
-        for (const req of step.required_tags) {
-          const available = availableCapacity.get(req.category) || 0;
-          if (typeof req.minimum === 'number' && available < req.minimum * 0.2) {
+      // Check equipment for at least one unit
+      for (const req of step.required_tags) {
+        const available = availableCapacity.get(req.category) || 0;
+        if (typeof req.minimum === 'number') {
+          const neededForOne = req.minimum;
+          if (available < neededForOne) {
             const tagName = getTagCategoryName(req.category);
-            reasons.push(`${step.name}: Need ${tagName} ${req.minimum}, have ${available}`);
+            reasons.push(`${step.name}: Need ${tagName} ${neededForOne}, have ${available}`);
+            canStart = false;
+          }
+        } else if (typeof req.minimum === 'boolean' && req.minimum) {
+          if (available === 0) {
+            const tagName = getTagCategoryName(req.category);
+            reasons.push(`${step.name}: Need ${tagName}`);
             canStart = false;
           }
         }
@@ -145,7 +158,7 @@ export function ManufacturingContentEnhanced() {
   
   return (
     <div className="font-mono text-teal-400 p-4 space-y-4">
-      {/* Facility Header */}
+      {/* Facility Header with Time Controls */}
       <pre className="whitespace-pre">
 {`╔════════════════════════════════════════════════════════════════════╗
 ║ MANUFACTURING - ${facility.name.padEnd(51)} ║
@@ -153,6 +166,34 @@ export function ManufacturingContentEnhanced() {
 ║ Credits: $${credits.toLocaleString().padEnd(15)} │ Time: ${new Date(gameTime.elapsed).toISOString().substr(11, 8).padEnd(30)} ║
 ╚════════════════════════════════════════════════════════════════════╝`}
       </pre>
+      
+      {/* Time Controls */}
+      <div className="flex gap-2 items-center mt-2">
+        <button
+          onClick={togglePause}
+          className="px-2 py-1 border border-yellow-400 text-yellow-400 hover:bg-yellow-900 text-xs"
+        >
+          {gameTime.isPaused ? '[RESUME]' : '[PAUSE]'}
+        </button>
+        <div className="flex gap-1">
+          {[0.5, 1, 2, 5, 10].map(speed => (
+            <button
+              key={speed}
+              onClick={() => setGameSpeed(speed)}
+              className={`px-2 py-1 border text-xs ${
+                gameTime.gameSpeed === speed 
+                  ? 'border-teal-400 text-teal-400 bg-teal-900' 
+                  : 'border-gray-600 text-gray-400 hover:border-gray-500'
+              }`}
+            >
+              {speed}x
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-gray-500">
+          (10 sec real = 1 game hour)
+        </span>
+      </div>
       
       {/* Equipment Overview */}
       <div>
@@ -187,16 +228,109 @@ ACTIVE PRODUCTION ({activeJobs.length} jobs):
         {activeJobs.length === 0 ? (
           <pre className="text-gray-600">  No active production</pre>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {activeJobs.map(job => {
-              const progress = job.stepProgress.reduce((sum, sp) => 
+              const overallProgress = job.stepProgress.reduce((sum, sp) => 
                 sp.state === StepState.COMPLETED ? sum + 100 : sum + sp.progress, 0
               ) / job.steps.length;
               
+              const currentStep = job.steps[job.currentStepIndex];
+              const currentStepProgress = job.stepProgress[job.currentStepIndex];
+              
               return (
-                <pre key={job.id} className="text-xs">
-{`  [${job.state === JobState.QUEUED ? 'QUEUED' : 'ACTIVE'}] ${job.productId} x${job.quantity} - ${job.steps[job.currentStepIndex]?.name || 'Complete'} - ${progress.toFixed(0)}%`}
-                </pre>
+                <div key={job.id} className="border border-gray-700 p-2">
+                  <div className="flex justify-between items-center">
+                    <div className="text-teal-300">
+                      {job.productId} x{job.quantity} - {overallProgress.toFixed(0)}%
+                    </div>
+                    <div className={`text-xs ${
+                      job.state === JobState.QUEUED ? 'text-yellow-400' : 'text-green-400'
+                    }`}>
+                      {job.state === JobState.QUEUED ? 'QUEUED' : 'IN PROGRESS'}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-2 space-y-1">
+                    {job.steps.map((step, idx) => {
+                      const stepProg = job.stepProgress[idx];
+                      const isActive = idx === job.currentStepIndex;
+                      const isCompleted = stepProg.state === StepState.COMPLETED;
+                      const isWaiting = stepProg.state === StepState.WAITING;
+                      const isBlocked = stepProg.state === StepState.BLOCKED;
+                      
+                      let statusColor = 'text-gray-500';
+                      let statusIcon = '○';
+                      if (isCompleted) {
+                        statusColor = 'text-green-400';
+                        statusIcon = '✓';
+                      } else if (isActive && stepProg.state === StepState.IN_PROGRESS) {
+                        statusColor = 'text-teal-400';
+                        statusIcon = '◐';
+                      } else if (isWaiting) {
+                        statusColor = 'text-yellow-400';
+                        statusIcon = '⏳';
+                      } else if (isBlocked) {
+                        statusColor = 'text-red-400';
+                        statusIcon = '✗';
+                      }
+                      
+                      const estimatedDuration = formatTime(
+                        (job.method.total_duration_hours * step.duration_percentage / 100)
+                      );
+                      
+                      return (
+                        <div key={step.id} className={`text-xs flex justify-between ${statusColor}`}>
+                          <span>
+                            {statusIcon} {idx + 1}. {step.name}
+                            {isActive && stepProg.state === StepState.IN_PROGRESS && 
+                              ` (${stepProg.progress.toFixed(0)}%)`
+                            }
+                          </span>
+                          <span className="text-gray-500">
+                            {estimatedDuration}
+                            {isWaiting && ' - waiting'}
+                            {isBlocked && ' - blocked'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Show blocking reasons for waiting jobs */}
+                  {job.state === JobState.QUEUED && (
+                    <div className="mt-2 text-xs text-red-300">
+                      <div>Waiting to start:</div>
+                      {(() => {
+                        const firstStep = job.steps[0];
+                        const reasons = [];
+                        
+                        // Check materials for first step
+                        for (const mat of firstStep.material_requirements) {
+                          const available = facility.current_storage[mat.material_id] || 0;
+                          const needed = mat.quantity * job.quantity;
+                          if (available < needed) {
+                            reasons.push(`Need ${needed} ${mat.material_id}, have ${available}`);
+                          }
+                        }
+                        
+                        // Check equipment
+                        const availableCapacity = getAvailableCapacity();
+                        for (const req of firstStep.required_tags) {
+                          if (typeof req.minimum === 'number') {
+                            const available = availableCapacity.get(req.category) || 0;
+                            if (available < req.minimum) {
+                              reasons.push(`Need ${getTagCategoryName(req.category)} ${req.minimum}, have ${available}`);
+                            }
+                          }
+                        }
+                        
+                        return reasons.slice(0, 3).map((reason, idx) => (
+                          <div key={idx} className="ml-2">• {reason}</div>
+                        ));
+                      })()}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -283,32 +417,38 @@ Customer Appeal: ${method.customer_appeal.join(', ')}`}
                       {step.material_requirements.length > 0 && (
                         <div className="text-xs mt-1">
                           <span className="text-gray-500">Materials: </span>
-                          {step.material_requirements.map(mat => {
-                            const available = materials[mat.material_id] || 0;
+                          {step.material_requirements.map((mat, matIdx) => {
+                            const available = facility.current_storage[mat.material_id] || 0;
                             const needed = mat.quantity * quantity;
                             const hasEnough = available >= needed;
                             
                             return (
-                              <span key={mat.material_id} className={hasEnough ? 'text-green-400' : 'text-red-400'}>
-                                {mat.material_id} {needed}/{available} 
+                              <span key={mat.material_id}>
+                                <span className={hasEnough ? 'text-green-400' : 'text-red-400'}>
+                                  {mat.material_id} {needed}/{available}
+                                </span>
+                                {matIdx < step.material_requirements.length - 1 && ', '}
                               </span>
                             );
-                          }).join(', ')}
+                          })}
                         </div>
                       )}
                       
                       {/* Equipment Requirements */}
                       <div className="text-xs mt-1">
                         <span className="text-gray-500">Equipment: </span>
-                        {step.required_tags.map(req => {
+                        {step.required_tags.map((req, reqIdx) => {
                           const tagName = getTagCategoryName(req.category);
                           const available = availableCapacity.get(req.category) || 0;
                           
                           if (typeof req.minimum === 'boolean') {
                             const hasIt = available > 0;
                             return (
-                              <span key={req.category} className={hasIt ? 'text-green-400' : 'text-red-400'}>
-                                {tagName} {hasIt ? '✓' : '✗'} 
+                              <span key={req.category}>
+                                <span className={hasIt ? 'text-green-400' : 'text-red-400'}>
+                                  {tagName} {hasIt ? '✓' : '✗'}
+                                </span>
+                                {reqIdx < step.required_tags.length - 1 && ', '}
                               </span>
                             );
                           } else {
@@ -318,12 +458,15 @@ Customer Appeal: ${method.customer_appeal.join(', ')}`}
                             else if (ratio < 0.6) colorClass = 'text-yellow-400';
                             
                             return (
-                              <span key={req.category} className={colorClass}>
-                                {tagName} {available}/{req.minimum}{req.optimal ? `(${req.optimal} optimal)` : ''} 
+                              <span key={req.category}>
+                                <span className={colorClass}>
+                                  {tagName} {available}/{req.minimum}{req.optimal ? `(${req.optimal} optimal)` : ''}
+                                </span>
+                                {reqIdx < step.required_tags.length - 1 && ', '}
                               </span>
                             );
                           }
-                        }).join(', ')}
+                        })}
                       </div>
                       
                       {/* Penalties */}
@@ -405,7 +548,7 @@ QUANTITY:
             : 'border-gray-600 text-gray-600 cursor-not-allowed'
         }`}
       >
-        [START PRODUCTION]
+        {quantity > 1 ? `[START ${quantity} JOBS]` : '[START PRODUCTION]'}
       </button>
       
       {/* Capacity Overview */}

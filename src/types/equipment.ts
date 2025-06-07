@@ -127,6 +127,14 @@ export function getEfficiencyPenalty(ratio: number): EfficiencyPenalty {
 }
 
 // Equipment instance in a facility
+export enum EquipmentStatus {
+  AVAILABLE = 'available',
+  RESERVED = 'reserved', // Reserved for a job but not yet in use
+  IN_USE = 'in_use',     // Currently being used by a job
+  MAINTENANCE = 'maintenance',
+  BROKEN = 'broken'
+}
+
 export interface EquipmentInstance {
   id: string; // Unique instance ID
   equipmentId: string; // References Equipment definition
@@ -137,8 +145,10 @@ export interface EquipmentInstance {
   lastMaintenance: number; // Game time timestamp
   totalOperatingHours: number;
   
-  // Usage tracking
-  currentlyUsedBy?: string[]; // Job IDs using this equipment
+  // Reservation and usage tracking
+  status: EquipmentStatus;
+  reservedBy?: string; // Job ID that has reserved this equipment
+  currentlyUsedBy?: string[]; // Job IDs using this equipment (for shared equipment)
   utilizationHistory: Array<{
     timestamp: number;
     utilization: number; // 0-100%

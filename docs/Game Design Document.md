@@ -4,47 +4,69 @@
 
 *Defense Magnate* is a single-player, browser-playable management simulation game set in a fractured galactic warzone. The player assumes the role of CEO of an arms manufacturing company, navigating the complex demands of industrial production, political contracts, shifting supply chains, and technological progress. The tone is hard-industrial with a retrofuturistic interface and emergent consequences.
 
-The game will launch as a web application with no backend, using clever encoding for save data and a modular interface for managing different systems. A Steam release may follow using Electron or Tauri.
+The game operates in real-time with a 1 minute = 1 game hour time scale, allowing players to watch their production lines progress naturally while maintaining engaging pacing. The game will launch as a web application with no backend, using clever encoding for save data and a modular interface for managing different systems. A Steam release may follow using Electron or Tauri.
+
+**Current Status**: Manufacturing v1 Complete - Core tag-based manufacturing system with equipment constraints is fully implemented and functional.
 
 ---
 
 ## Core Gameplay Features
 
-### 1. **Industrial Management Loop**
+### 1. **Tag-Based Manufacturing System** ✅ IMPLEMENTED
 
-* Players manage R\&D, manufacturing, and contract fulfillment.
-* Start with basic weapons (e.g., phasers) and scale to building modular capital ships.
-* Use production facilities with customizable efficiency, retooling costs, and outputs.
+The core of Defense Magnate is a realistic manufacturing system where production capabilities are determined by actual equipment, not abstract numbers.
 
-### 2. **R\&D System**
+**Equipment & Constraints:**
+* Each piece of equipment provides specific **capability tags** (e.g., "Turning 8%", "Surface 2m²", "Holding: true")
+* Manufacturing steps require **specific tag combinations** to operate
+* Total facility capability is **calculated dynamically** from installed equipment
+* Equipment condition affects capacity - damaged tools provide reduced capability
+
+**Real-Time Production:**
+* **Production job queue** manages multiple concurrent manufacturing projects
+* **Step-by-step manufacturing** with realistic resource allocation
+* **Bottleneck analysis** identifies which equipment types are limiting production
+* **Constraint tooltips** explain exactly why production can't start and what's needed
+
+**Multiple Manufacturing Methods:**
+* Each product can be made via different methods with different requirements
+* **Forge Method**: High-quality output using raw materials and precision equipment
+* **Restore Method**: Repair damaged items using spare parts and basic tools
+* **Cobble Method**: Low-quality assembly from scrap materials
+
+### 2. **R\&D System** 🚧 PLANNED
 
 * Allocate points or resources to tech trees (weapons, sensors, hulls, power systems).
 * Progress unlocks new schematics and production options.
 * Research speed and cost are influenced by facility investment and tech alignment.
+* **Study & Reverse Engineer**: Examine salvaged components to unlock new technologies
 
-### 3. **Dynamic Contract System**
+### 3. **Dynamic Contract System** 🚧 PLANNED
 
 * Compete for military and corporate contracts with faction-specific needs.
 * Contracts include deadlines, budget caps, and custom loadouts.
 * Fulfilling a contract may have ripple effects (e.g., attacking your own suppliers).
+* **Customer Relations**: Build reputation with different galactic factions
 
-### 4. **Supply Chain Mechanics**
+### 4. **Supply Chain Mechanics** 🚧 NEXT PRIORITY
 
-* Materials like space-titanium, quantum plastics, and antimatter sourced from galactic nodes.
-* Supply chains can be disrupted by war, piracy, or your own deliveries.
+* Materials like steel, plastics, electronics, and exotic materials sourced from suppliers.
+* Supply chains can be disrupted by war, piracy, or market fluctuations.
 * Players may scout new suppliers or develop substitute materials through R\&D.
+* **Material Quality**: Different grades affect final product quality and failure rates
 
-### 5. **Starmap Incident System**
+### 5. **Starmap Incident System** 🚧 PLANNED
 
 * Right panel features a starmap showing:
-
   * Conflicts (⚔️), pirate activity (☠️), disruptions (⚠️), and scouting ops (👁️)
 * Strategic decisions emerge from interpreting and reacting to these map events.
+* **Discovery & Salvage**: Auction system for salvage lots and component examination
 
-### 6. **Save System & Portability**
+### 6. **Save System & Portability** ✅ IMPLEMENTED
 
-* Game state saved to browser localStorage
+* Game state saved to browser localStorage with real-time autosave
 * Manual export/import available via compressed string code ("Command Codes")
+* No backend dependencies - fully client-side game architecture
 * Supports offline play and infinite scalability
 
 ### 7. **Optional Features for Expansion**

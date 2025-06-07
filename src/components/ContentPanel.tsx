@@ -1,6 +1,6 @@
 import { useGameStore } from '../state/gameStoreWithEquipment'
 import { ResearchContent } from './ResearchContent'
-import { ManufacturingContentEnhanced } from './ManufacturingContentEnhanced'
+import { MachineWorkspaceView } from './MachineWorkspaceView'
 import { ContractsContent } from './ContractsContent'
 import { SupplyContent } from './SupplyContent'
 import { EquipmentPanelSimple } from './EquipmentPanelSimple'
@@ -13,7 +13,7 @@ export function ContentPanel() {
       case 'research':
         return <ResearchContent />
       case 'manufacturing':
-        return <ManufacturingContentEnhanced />
+        return <MachineWorkspaceView />
       case 'equipment':
         return <EquipmentPanelSimple />
       case 'contracts':

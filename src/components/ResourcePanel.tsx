@@ -2,8 +2,12 @@ import { useGameStore } from '../state/gameStoreWithEquipment'
 
 export function ResourcePanel() {
   const resources = useGameStore((state) => state.resources)
+  const selectedFacilityId = useGameStore((state) => state.selectedFacilityId)
+  const facilities = useGameStore((state) => state.facilities)
 
+  const selectedFacility = facilities.find(f => f.id === selectedFacilityId)
   const resourceEntries = Object.entries(resources)
+  const materialEntries = selectedFacility ? Object.entries(selectedFacility.current_storage) : []
 
   return (
     <div className="space-y-6">
@@ -21,6 +25,26 @@ export function ResourcePanel() {
           ))}
         </div>
       </div>
+
+      {/* Facility Materials */}
+      {selectedFacility && (
+        <div className="terminal-card">
+          <div className="terminal-header">
+            <span className="ascii-accent">◇</span> MATERIALS ({selectedFacility.name})
+          </div>
+          <div className="space-y-3">
+            {materialEntries.map(([name, amount]) => (
+              <div key={name} className="flex justify-between items-center">
+                <span className="text-gray-400 text-sm">{name}</span>
+                <span className="font-mono text-teal-400">{amount.toLocaleString()}</span>
+              </div>
+            ))}
+            {materialEntries.length === 0 && (
+              <div className="text-gray-500 text-sm">No materials in storage</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Starmap */}
       <div className="terminal-card">
