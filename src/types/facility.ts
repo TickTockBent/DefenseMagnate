@@ -5,6 +5,7 @@ import type { ProductionLine } from './productionLine';
 import type { EquipmentInstance } from './equipment';
 import type { ProductionQueue } from './productionJob';
 import type { FacilityTrait, ItemSize } from './shared';
+import type { FacilityInventory } from './inventory';
 
 export type FacilityType = 
   | 'garage_workshop'
@@ -75,8 +76,9 @@ export interface Facility {
   production_queue?: ProductionQueue
   active_production: ProductionLine[] // Legacy - to be migrated
   
-  // Storage
-  current_storage: Record<string, number> // Material/component -> amount
+  // Storage (legacy and new systems)
+  current_storage: Record<string, number> // LEGACY: Material/component -> amount
+  inventory?: FacilityInventory // NEW: Unified inventory system
   pending_upgrades: FacilityUpgrade[]
   
   // Condition & Status

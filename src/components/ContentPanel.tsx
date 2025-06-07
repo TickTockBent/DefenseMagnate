@@ -2,7 +2,7 @@ import { useGameStore } from '../state/gameStoreWithEquipment'
 import { ResearchContent } from './ResearchContent'
 import { MachineWorkspaceView } from './MachineWorkspaceView'
 import { ContractsContent } from './ContractsContent'
-import { SupplyContent } from './SupplyContent'
+import { MarketContent } from './MarketContent'
 import { EquipmentPanelSimple } from './EquipmentPanelSimple'
 
 export function ContentPanel() {
@@ -16,10 +16,10 @@ export function ContentPanel() {
         return <MachineWorkspaceView />
       case 'equipment':
         return <EquipmentPanelSimple />
+      case 'market':
+        return <MarketContent />
       case 'contracts':
         return <ContractsContent />
-      case 'supply':
-        return <SupplyContent />
       default:
         return <div>Unknown tab</div>
     }

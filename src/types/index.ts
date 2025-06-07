@@ -59,5 +59,13 @@ export * from '../constants/enums';
 // Machine slot system types
 export * from './machineSlot';
 
+// Market and contracts system types
+export * from './market';
+export * from './contracts';
+
+// Unified item system types
+export * from './items';
+export * from './inventory';
+
 // Re-export common utilities
 export * from '../utils/formatters';

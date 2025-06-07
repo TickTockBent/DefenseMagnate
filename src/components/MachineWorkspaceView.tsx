@@ -6,6 +6,7 @@ import { Equipment, EquipmentInstance } from '../types';
 import { formatGameTime } from '../utils/gameClock';
 import { useState, useEffect } from 'react';
 import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
+import { inventoryManager } from '../utils/inventoryManager';
 // LEGACY: import { JobState } from '../constants/enums'; // No longer needed with new machine workspace system
 
 // Helper function to format product names for display
@@ -299,36 +300,56 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
           <div>
             <div className="text-xs text-gray-500 mb-1">Select Method:</div>
             <div className="space-y-2">
-              {selectedProductData.methods.map(method => (
-                <div key={method.id} className="border border-gray-600 bg-gray-900">
-                  <div className="p-2">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="font-bold text-teal-400 text-xs">{method.name}</div>
-                        <div className="text-gray-400 text-xs">{method.description}</div>
-                        <div className="text-gray-500 text-xs mt-1">
-                          {method.operations.length} operations, ~{method.operations.reduce((sum, op) => sum + op.baseDurationMinutes, 0)} min
+              {selectedProductData.methods.map(method => {
+                // Check if all materials are available
+                const allMaterials = method.operations.flatMap(op => op.material_requirements);
+                const hasAllMaterials = allMaterials.every(mat => {
+                  let available: number;
+                  if (facility.inventory) {
+                    if (mat.required_tags && mat.required_tags.length > 0) {
+                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags, mat.max_quality);
+                    } else {
+                      available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
+                    }
+                  } else {
+                    available = facility.current_storage[mat.material_id] || 0;
+                  }
+                  return available >= mat.quantity;
+                });
+                
+                return (
+                  <div key={method.id} className="border border-gray-600 bg-gray-900">
+                    <div className="p-2">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="font-bold text-teal-400 text-xs">{method.name}</div>
+                          <div className="text-gray-400 text-xs">{method.description}</div>
+                          <div className="text-gray-500 text-xs mt-1">
+                            {method.operations.length} operations, ~{method.operations.reduce((sum, op) => sum + op.baseDurationMinutes, 0)} min
+                          </div>
+                        </div>
+                        <div className="flex gap-1 ml-2">
+                          <button
+                            onClick={() => setShowMethodDetails(showMethodDetails === method.id ? null : method.id)}
+                            className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 text-xs border border-gray-600"
+                          >
+                            Details
+                          </button>
+                          <button
+                            onClick={() => handleStartJob(facility.id, selectedProduct!, method.id, 1)}
+                            disabled={!hasAllMaterials}
+                            className={`px-3 py-1 text-xs border transition-colors ${
+                              !hasAllMaterials
+                                ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
+                                : startingJob === method.id 
+                                  ? 'bg-green-700 border-green-500 text-green-100' 
+                                  : 'bg-teal-800 hover:bg-teal-700 text-teal-100 border-teal-600'
+                            }`}
+                          >
+                            {!hasAllMaterials ? 'No Materials' : startingJob === method.id ? 'Started!' : 'Start'}
+                          </button>
                         </div>
                       </div>
-                      <div className="flex gap-1 ml-2">
-                        <button
-                          onClick={() => setShowMethodDetails(showMethodDetails === method.id ? null : method.id)}
-                          className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 text-xs border border-gray-600"
-                        >
-                          Details
-                        </button>
-                        <button
-                          onClick={() => handleStartJob(facility.id, selectedProduct!, method.id, 1)}
-                          className={`px-3 py-1 text-xs border transition-colors ${
-                            startingJob === method.id 
-                              ? 'bg-green-700 border-green-500 text-green-100' 
-                              : 'bg-teal-800 hover:bg-teal-700 text-teal-100 border-teal-600'
-                          }`}
-                        >
-                          {startingJob === method.id ? 'Started!' : 'Start'}
-                        </button>
-                      </div>
-                    </div>
                     
                     {/* Method Details */}
                     {showMethodDetails === method.id && (
@@ -337,11 +358,36 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                           <div className="mb-2">
                             <span className="text-gray-500">Materials:</span>
                             <div className="ml-2 space-y-1">
-                              {method.operations.flatMap(op => op.material_requirements).map((mat, idx) => (
-                                <div key={idx} className="text-gray-400">
-                                  • {mat.material_id}: {mat.quantity} {mat.consumed_at_start ? '(consumed at start)' : '(consumed at end)'}
-                                </div>
-                              ))}
+                              {method.operations.flatMap(op => op.material_requirements).map((mat, idx) => {
+                                // Check availability from new inventory or legacy storage
+                                let available: number;
+                                if (facility.inventory) {
+                                  if (mat.required_tags && mat.required_tags.length > 0) {
+                                    available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags, mat.max_quality);
+                                  } else {
+                                    available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
+                                  }
+                                } else {
+                                  available = facility.current_storage[mat.material_id] || 0;
+                                }
+                                const hasEnough = available >= mat.quantity;
+                                
+                                const tagDisplay = mat.required_tags && mat.required_tags.length > 0 
+                                  ? ` [${mat.required_tags.join(', ')}]` 
+                                  : '';
+                                const qualityDisplay = mat.max_quality !== undefined 
+                                  ? ` (≤${mat.max_quality}%)` 
+                                  : '';
+                                
+                                return (
+                                  <div key={idx} className={hasEnough ? "text-gray-400" : "text-red-400"}>
+                                    • {mat.material_id}{tagDisplay}{qualityDisplay}: {mat.quantity} {mat.consumed_at_start ? '(consumed at start)' : '(consumed at end)'}
+                                    <span className="ml-2 text-xs">
+                                      (Available: {available})
+                                    </span>
+                                  </div>
+                                );
+                              })}
                               {method.operations.every(op => op.material_requirements.length === 0) && (
                                 <div className="text-gray-400">No materials required</div>
                               )}
@@ -362,7 +408,8 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
