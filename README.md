@@ -1,18 +1,20 @@
 # Defense Magnate
 
-A real-time arms manufacturing management game built with React, TypeScript, and Vite. Players run an arms manufacturing company in a fractured galactic warzone, managing production lines, equipment, materials, and contracts in real-time.
+A real-time arms manufacturing management game built with React, TypeScript, and Vite. Players run an arms manufacturing company in a fractured galactic warzone, managing production workflows, machine assignments, materials, and contracts in real-time.
 
 ## 🎮 Game Overview
 
 Defense Magnate is a browser-based management simulation where you:
-- **Manufacture weapons and components** using realistic tag-based equipment constraints
-- **Manage real-time production** with 1 minute = 1 game hour time scale
-- **Upgrade facilities** with specialized equipment to expand capabilities
-- **Handle contracts** from various galactic factions
-- **Research new technologies** by studying salvaged components
-- **Optimize production lines** to maximize efficiency and profit
+- **Manufacture weapons and components** using realistic machine workspace systems
+- **Manage real-time production** with 1 minute = 1 game hour time scale  
+- **Optimize machine utilization** with facility-wide job queues and dynamic assignment
+- **Handle multiple product lines** with different manufacturing methods
+- **Watch jobs flow** through machines automatically with visual progress indicators
+- **Get real-time feedback** with job completion notifications and activity spinners
 
-## 🏗️ Current Implementation Status (Manufacturing v1 Complete)
+## 🔧 Version Mv1 - Machine Workspace System (Complete)
+
+### 📋 **Patch Notes - Manufacturing v1**
 
 ### ✅ **Core Systems Implemented:**
 

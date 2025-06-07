@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Defense Magnate is a single-player, browser-playable real-time management simulation game where players run an arms manufacturing company in a fractured galactic warzone. The game operates in real-time with a 1 minute = 1 game hour time scale, allowing players to watch their production lines progress naturally. The game is built as a web application with no backend, using browser localStorage for saves and compressed string codes for save portability.
 
-**Current Status**: Manufacturing v1 Pass Complete - Core manufacturing system with tag-based equipment constraints fully implemented and functional.
+**Current Status**: Manufacturing v1 Pass Complete - Full machine workspace system with facility-wide job queues, multiple products, and real-time job notifications implemented and functional.
 
 ## Technology Stack
 
@@ -24,30 +24,34 @@ Defense Magnate is a single-player, browser-playable real-time management simula
 ```
 src/
 ├── components/          # UI components and panels
-│   ├── ManufacturingContentEnhanced.tsx    # Main manufacturing UI
-│   ├── EquipmentPanel.tsx                   # Equipment management
-│   ├── ProductionOverviewPanel.tsx          # Production monitoring
-│   └── ConstraintsTooltip.tsx               # Constraint explanations
-├── constants/           # Game enums and constants
-│   └── enums.ts        # All game enums consolidated
-├── data/               # Static game data and equipment definitions
+│   ├── MachineWorkspaceView.tsx             # Main manufacturing UI with machine slots
+│   ├── ContentPanel.tsx                     # Tab-based content routing
+│   ├── ResourcePanel.tsx                    # Material inventory display
+│   ├── HorizontalTabs.tsx                   # Main navigation tabs
+│   └── TabPanel.tsx                         # Generic tab wrapper
+├── data/               # Static game data and manufacturing definitions
 │   ├── equipment.ts    # Equipment database and starter sets
-│   ├── materials.ts    # Material definitions
-│   └── productHelpers.ts # Product manufacturing data
+│   ├── materials.ts    # Material definitions  
+│   ├── manufacturingMethods.ts              # Product manufacturing methods
+│   └── productHelpers.ts # Legacy product data
 ├── state/              # Zustand game state management
-│   └── gameStoreWithEquipment.ts # Main game store with equipment
+│   └── gameStoreWithEquipment.ts # Main game store with machine workspace
 ├── systems/            # Core game logic
-│   └── productionScheduler.ts # Real-time production scheduling
+│   ├── machineWorkspace.ts                  # Machine slot job management
+│   └── productionScheduler.ts # Legacy production system
 ├── types/              # TypeScript type definitions (barrel exported)
 │   ├── index.ts        # Barrel export for all types
-│   ├── game.ts         # High-level game state composition
-│   ├── equipment.ts    # Equipment and tag system types
+│   ├── facility.ts     # Facility and equipment types
+│   ├── machineSlot.ts  # Machine workspace and job slot types
 │   ├── manufacturing.ts # Manufacturing process types
-│   ├── productionJob.ts # Production job queue types
-│   └── future.ts       # Type definitions for planned features
+│   ├── material.ts     # Material and inventory types
+│   ├── product.ts      # Product definition types
+│   ├── productionLine.ts # Legacy production types
+│   └── shared.ts       # Common utility types
 ├── utils/              # Utility functions and formatters
-│   ├── formatters.ts   # Display formatting functions
-│   └── gameClock.ts    # Real-time game clock
+│   ├── gameClock.ts    # Real-time game clock (1 min = 1 hour)
+│   ├── ascii.ts        # ASCII art utilities
+│   └── timeSystem.ts   # Time formatting utilities
 └── App.tsx             # Main application layout
 ```
 
@@ -78,27 +82,36 @@ npm run typecheck
 ## Core Architecture (Manufacturing v1 Complete)
 
 ### Game State Structure
-The game uses a centralized state pattern with Zustand. The core `GameState` interface in `types/game.ts` includes:
+The game uses a centralized state pattern with Zustand. The core `GameState` interface includes:
 - `gameTime`: Real-time clock with pause/speed controls (1 real minute = 1 game hour)
-- `facilities`: Production facilities with equipment and real-time job queues
-- `materials`: Raw materials and component inventory with storage limits
-- `equipmentDatabase`: Global equipment definitions and market
-- `research`: Future R&D projects and technology trees
-- `contracts`: Future contract system and customer relations
-- `ui`: Player preferences and interface state
+- `facilities`: Production facilities with equipment and machine workspaces
+- `machineWorkspace`: Facility-wide job queue and machine slot management
+- `equipmentDatabase`: Global equipment definitions and capabilities
+- `jobCompletionNotifications`: Real-time completion feedback system
+- `materials`: Raw materials and component inventory tracking
+- `research`: Future R&D projects and technology trees (stubbed)
+- `contracts`: Future contract system and customer relations (stubbed)
 
-### Tag-Based Manufacturing System
-- **Equipment Tags**: Each equipment provides specific capabilities (e.g., "Turning 8%", "Surface 2m²")
-- **Production Constraints**: Manufacturing steps require specific tag combinations  
-- **Dynamic Capacity**: Equipment capacity calculated automatically from installed tools
-- **Quality & Efficiency**: Equipment condition affects production speed and output quality
-- **Real-Time Scheduling**: Production jobs allocated to equipment with bottleneck analysis
+### Machine Workspace System
+- **Facility-Wide Job Queue**: Single priority queue for all jobs, not machine-specific queues
+- **Machine Slots**: Each machine has one slot that can be occupied or idle
+- **Dynamic Job Assignment**: Jobs pull from facility queue to any suitable idle machine
+- **Real-Time Job Flow**: Jobs move through operations automatically as machines become available
+- **Pull-Based Architecture**: Machines pull work rather than jobs being pushed to machines
 
-### Production Job Queue System
-- **Job Scheduling**: Priority-based job queue with equipment allocation
-- **Step Progression**: Multi-step manufacturing with real-time resource management
-- **Constraint Analysis**: Real-time feedback on why production can't start
-- **Bottleneck Tracking**: Identifies which equipment types are limiting production
+### Single-Machine Operations Architecture
+- **Operation Decomposition**: Each manufacturing step uses exactly one machine
+- **Tag-Based Requirements**: Operations require specific equipment capabilities (SURFACE, TURNING, MILLING, etc.)
+- **Sequential Processing**: Jobs flow through multiple single-machine operations in sequence
+- **Equipment Efficiency**: Machine quality affects operation duration and success rates
+- **Material Consumption**: Materials consumed at operation start or completion
+
+### Multi-Product Manufacturing
+- **Basic Sidearm**: 3 manufacturing methods (Forge New, Restore Damaged, Cobble Together)
+- **Tactical Knife**: 3 manufacturing methods (Forge New, Restore Damaged, Quick Sharpen)
+- **Method Variety**: Different complexity levels (2-6 operations, 11-135 minutes)
+- **Equipment Utilization**: Different methods stress different machine types
+- **Customer Segments**: Methods target different quality/price markets
 
 ### Real-Time System
 - **Time Scale**: 1 real minute = 1 game hour for balanced pacing
@@ -120,10 +133,13 @@ The game uses a centralized state pattern with Zustand. The core `GameState` int
 
 ### UI Design
 - **ASCII Terminal Aesthetic**: Retro sci-fi styling with monospace fonts
-- **Layout**: Left panel (tabs), Center (active content), Right (resources/equipment)
+- **Layout**: Left panel (tabs), Center (active content), Right (resources/map)
 - **Color Scheme**: Teal, gray, black with semantic coloring for status
-- **Real-Time Feedback**: Live constraint analysis and production monitoring
-- **Tooltip System**: Detailed explanations of equipment requirements
+- **Machine Grid**: Visual equipment layout with live status indicators
+- **Activity Spinners**: Thematic animations for active machines (⚒ workbench, ◉ lathe, ⟲ mill)
+- **Job Notifications**: Pop-up completion alerts with auto-dismiss
+- **Product Dropdown**: Clean selection interface with expandable method details
+- **Queue Visualization**: Scrollable facility-wide job queue with priority indicators
 
 ## Development Workflow
 
@@ -178,26 +194,43 @@ facility.equipment_capacity = new Map([
 ## Current Implementation Status
 
 **✅ Manufacturing v1 Complete**: 
-- Tag-based equipment constraints working
-- Real-time production job scheduling
-- Multi-step manufacturing processes  
-- Dynamic equipment capacity calculation
-- Comprehensive constraint analysis and UI feedback
-- Starter garage with full equipment and materials for testing
+- Machine workspace system with facility-wide job queues
+- Single-machine operation architecture with tag-based equipment matching
+- Real-time job flow through multiple machines automatically
+- Two complete product lines with 6 total manufacturing methods
+- Job completion notifications with thematic machine activity indicators
+- Product dropdown selection with detailed method breakdowns
+- Full equipment database with 6 machine types and thematic spinners
 
-**🚧 Next Priority**: Materials & Supply Chain system
+**🚧 Next Priority**: Research & Development system for technology progression
 
 ## Testing Setup
 
 The game starts with a fully equipped garage containing:
-- Basic hand tools (manipulation capability)
-- Workbench (surface and holding capability)  
-- Storage shelving (storage capacity)
-- Manual lathe (turning operations)
-- Manual mill (milling and drilling operations)
-- Starter materials for all manufacturing methods
+- **Basic Hand Tools** (⚡ basic manipulation 10)
+- **Precision Hand Tools** (⚙ precision manipulation 8, basic manipulation 15)  
+- **Basic Workbench** (⚒ surface 2m², holding capability, storage 0.5m³)
+- **Manual Lathe** (◉ turning operations 8%)
+- **Manual Mill** (⟲ milling 10%, drilling 15%)
+- **Basic Measuring Tools** (📐 measuring and quality control)
 
-Players can immediately test:
-- **Forge Basic Sidearm**: Make pristine weapons from steel + plastic
-- **Restore Basic Sidearm**: Repair damaged weapons with spare parts  
-- **Cobble Basic Sidearm**: Assemble junk-quality weapons from scrap
+### Available Products & Methods
+
+**Basic Sidearm (6 operations, 135 min total)**:
+- **Forge New**: Premium quality from steel + plastic → pristine quality
+- **Restore Damaged**: Repair damaged weapons → functional quality  
+- **Cobble Together**: Quick assembly → junk quality
+
+**Tactical Knife (2-6 operations, 11-85 min total)**:
+- **Forge New**: High-quality blade from steel + aluminum → pristine quality
+- **Restore Damaged**: Repair damaged knives → functional quality
+- **Quick Sharpen**: Fast edge restoration → functional quality
+
+### Material Inventory
+Starting materials support immediate testing:
+- Steel (20 units), Plastic (15 units), Aluminum (2 units)
+- Damaged weapons and knives for restoration methods
+- Machined parts and electronics for repairs
+- All materials consumed realistically during production
+
+Players can immediately test multi-product workflows, queue management, machine utilization optimization, and completion notifications.

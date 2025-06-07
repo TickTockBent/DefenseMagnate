@@ -6,33 +6,46 @@
 
 The game operates in real-time with a 1 minute = 1 game hour time scale, allowing players to watch their production lines progress naturally while maintaining engaging pacing. The game will launch as a web application with no backend, using clever encoding for save data and a modular interface for managing different systems. A Steam release may follow using Electron or Tauri.
 
-**Current Status**: Manufacturing v1 Complete - Core tag-based manufacturing system with equipment constraints is fully implemented and functional.
+**Current Status**: Manufacturing v1 Complete - Full machine workspace system with facility-wide job queues, multiple products, and real-time notifications is fully implemented and functional.
 
 ---
 
 ## Core Gameplay Features
 
-### 1. **Tag-Based Manufacturing System** ✅ IMPLEMENTED
+### 1. **Machine Workspace Manufacturing System** ✅ IMPLEMENTED
 
-The core of Defense Magnate is a realistic manufacturing system where production capabilities are determined by actual equipment, not abstract numbers.
+The core of Defense Magnate is a realistic manufacturing system where production flows through physical machine slots in a facility workspace.
 
-**Equipment & Constraints:**
-* Each piece of equipment provides specific **capability tags** (e.g., "Turning 8%", "Surface 2m²", "Holding: true")
-* Manufacturing steps require **specific tag combinations** to operate
-* Total facility capability is **calculated dynamically** from installed equipment
-* Equipment condition affects capacity - damaged tools provide reduced capability
+**Machine Slot Architecture:**
+* Each machine has **one work slot** that can be occupied or idle
+* **Facility-wide job queue** feeds jobs to any suitable available machine
+* **Single-machine operations** - each manufacturing step uses exactly one machine
+* **Dynamic job assignment** - jobs automatically flow to the best available machine
+* **Pull-based workflow** - machines pull work from the facility queue when ready
 
-**Real-Time Production:**
-* **Production job queue** manages multiple concurrent manufacturing projects
-* **Step-by-step manufacturing** with realistic resource allocation
-* **Bottleneck analysis** identifies which equipment types are limiting production
-* **Constraint tooltips** explain exactly why production can't start and what's needed
+**Equipment & Tag System:**
+* Equipment provides specific **capability tags** (SURFACE, TURNING, MILLING, BASIC_MANIPULATION, etc.)
+* Operations require **specific tag combinations** with minimum thresholds
+* **Tag matching** determines which machines can perform which operations
+* **Equipment efficiency** affects operation duration and success rates
 
-**Multiple Manufacturing Methods:**
-* Each product can be made via different methods with different requirements
-* **Forge Method**: High-quality output using raw materials and precision equipment
-* **Restore Method**: Repair damaged items using spare parts and basic tools
-* **Cobble Method**: Low-quality assembly from scrap materials
+**Multi-Product Manufacturing:**
+* **Basic Sidearm**: 3 methods (Forge New, Restore Damaged, Cobble Together)
+* **Tactical Knife**: 3 methods (Forge New, Restore Damaged, Quick Sharpen)
+* **6 total manufacturing paths** with different complexity (2-6 operations, 11-135 minutes)
+* **Diverse equipment usage** - different methods stress different machine types
+
+**Real-Time Production Flow:**
+* **Sequential operations** - jobs flow through multiple machines automatically
+* **Real-time job queue** with priority and rush order support
+* **Material consumption** at operation start with realistic inventory tracking
+* **Job completion notifications** with auto-dismiss and manual close options
+
+**Visual Workshop Interface:**
+* **Machine grid layout** showing all equipment with live status
+* **Thematic activity spinners** (⚒ workbench, ◉ lathe, ⟲ mill, 🔧 hand tools)
+* **Product dropdown selection** with expandable method details
+* **Scrollable job queue** with priority indicators and operation status
 
 ### 2. **R\&D System** 🚧 PLANNED
 
