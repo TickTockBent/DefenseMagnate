@@ -13,11 +13,15 @@ import {
   ManufacturingMethod,
   MachineWorkspace,
   MachineBasedMethod,
+  MarketState,
+  ContractState,
   createGarage,
   aggregateEquipmentTags
 } from '../types';
 import { ProductionScheduler } from '../systems/productionScheduler';
 import { MachineWorkspaceManager } from '../systems/machineWorkspace';
+import { MarketGenerator } from '../systems/marketGenerator';
+import { ContractGenerator } from '../systems/contractGenerator';
 import { equipmentDatabase, starterEquipmentSets } from '../data/equipment';
 import { productsWithMethods } from '../data/productsWithTags';
 import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
@@ -85,15 +89,23 @@ interface GameState {
   machineWorkspaceManager: MachineWorkspaceManager;
   machineWorkspace?: MachineWorkspace;
   
+  // Market and contract generators
+  marketGenerator: MarketGenerator;
+  contractGenerator: ContractGenerator;
+  
   // Legacy production (to be migrated)
   productionLines: ProductionLine[];
   completedProducts: Record<string, number>; // Product inventory
   
-  // Contracts
-  contracts: Contract[];
+  // LEGACY: Contracts (old system - being replaced by contractState)
+  contracts: Contract[]; // TODO: Remove after migration complete
+  
+  // Market and Contracts System
+  marketState: MarketState;
+  contractState: ContractState;
   
   // UI State
-  activeTab: 'research' | 'manufacturing' | 'equipment' | 'contracts' | 'supply';
+  activeTab: 'research' | 'manufacturing' | 'equipment' | 'market' | 'contracts';
   selectedFacilityId: string | null;
   
   // Notifications
@@ -109,8 +121,8 @@ interface GameState {
   // Research actions
   startResearch: (researchId: string) => void;
   
-  // Contract actions
-  acceptContract: (contractId: string) => void;
+  // LEGACY: Contract actions (old system - being replaced)
+  acceptContract: (contractId: string) => void; // TODO: Remove after migration
   
   // Resource actions
   updateResource: (resource: string, amount: number) => void;
@@ -150,6 +162,18 @@ interface GameState {
   // Notification actions
   addJobCompletionNotification: (notification: Omit<JobCompletionNotification, 'id' | 'timestamp'>) => void;
   dismissNotification: (id: string) => void;
+  
+  // Market actions
+  purchaseMarketLot: (lotId: string, facilityId: string) => void;
+  listProductForSale: (facilityId: string, productId: string, quantity: number, pricePerUnit: number) => void;
+  removePlayerListing: (listingId: string) => void;
+  refreshMarketLots: () => void;
+  
+  // Contract actions
+  acceptCustomerContract: (contractId: string) => void;
+  acceptSupplyContract: (contractId: string) => void;
+  fulfillContract: (contractId: string, facilityId: string) => void;
+  refreshContracts: () => void;
 }
 
 // Helper to create initial equipment instances
@@ -183,10 +207,33 @@ export const useGameStore = create<GameState>((set, get) => ({
   equipmentDatabase: equipmentDatabase,
   productionScheduler: new ProductionScheduler(equipmentDatabase),
   machineWorkspaceManager: new MachineWorkspaceManager(equipmentDatabase),
+  marketGenerator: new MarketGenerator(),
+  contractGenerator: new ContractGenerator(),
   
   productionLines: [],
   completedProducts: {},
   contracts: [],
+  
+  // Market and contracts system initialization
+  marketState: {
+    availableLots: [],
+    activePurchaseOrders: [],
+    playerListings: [],
+    transactionHistory: [],
+    lastLotRefresh: 0,
+    nextRefreshAt: 0
+  },
+  contractState: {
+    availableCustomerContracts: [],
+    availableSupplyContracts: [],
+    activeCustomerContracts: [],
+    activeSupplyContracts: [],
+    contractProgress: new Map(),
+    completedContracts: [],
+    contractHistory: [],
+    lastContractRefresh: 0,
+    nextRefreshAt: 0
+  },
   
   activeTab: 'manufacturing',
   selectedFacilityId: null,
@@ -196,28 +243,109 @@ export const useGameStore = create<GameState>((set, get) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedFacility: (facilityId) => set({ selectedFacilityId: facilityId }),
   
-  updateGameTime: (deltaMs) => set(state => ({
-    gameTime: { 
+  updateGameTime: (deltaMs) => set(state => {
+    const newGameTime = { 
       ...updateGameTime(state.gameTime, deltaMs), 
       elapsed: state.gameTime.elapsed + deltaMs,
       deltaTime: deltaMs
+    };
+    
+    // Process purchase order deliveries
+    const updatedPurchaseOrders = state.marketState.activePurchaseOrders.map(order => {
+      if (order.status === 'ordered' && newGameTime.totalGameHours >= order.deliveryAt) {
+        // Deliver materials to facility
+        const facility = state.facilities.find(f => f.id === order.facilityId);
+        if (facility) {
+          const currentAmount = facility.current_storage[order.materialId] || 0;
+          facility.current_storage[order.materialId] = currentAmount + order.quantity;
+        }
+        
+        return { ...order, status: 'delivered' as const };
+      }
+      return order;
+    });
+    
+    // Remove old delivered orders (keep last 5 for display)
+    const deliveredOrders = updatedPurchaseOrders.filter(o => o.status === 'delivered');
+    const activeOrders = updatedPurchaseOrders.filter(o => o.status !== 'delivered');
+    const recentDelivered = deliveredOrders.slice(-5);
+    
+    // Process player product sales
+    const updatedPlayerListings = state.marketState.playerListings.map(listing => {
+      if (listing.status !== 'active' || listing.soldQuantity >= listing.quantity) {
+        return listing;
+      }
+      
+      // Simple sales simulation - chance to sell 1 unit per hour
+      const salesChance = 0.1; // 10% chance per hour
+      const remainingQuantity = listing.quantity - listing.soldQuantity;
+      
+      if (Math.random() < salesChance && remainingQuantity > 0) {
+        const soldQuantity = listing.soldQuantity + 1;
+        const revenue = listing.pricePerUnit;
+        
+        // Add revenue to credits
+        state.credits += revenue;
+        
+        // Update listing
+        const updatedListing = {
+          ...listing,
+          soldQuantity,
+          status: soldQuantity >= listing.quantity ? 'sold' as const : 'partially_sold' as const
+        };
+        
+        return updatedListing;
+      }
+      
+      return listing;
+    });
+    
+    // Remove expired or fully sold listings (keep last 3 for display)
+    const activeSales = updatedPlayerListings.filter(l => 
+      l.status === 'active' || l.status === 'partially_sold'
+    );
+    const completedSales = updatedPlayerListings.filter(l => 
+      l.status === 'sold' || l.status === 'expired'
+    ).slice(-3);
+    
+    // Apply gradual market dynamics every 6 hours
+    let marketLots = state.marketState.availableLots;
+    const previousHour = state.gameTime.totalGameHours;
+    if (Math.floor(newGameTime.totalGameHours / 6) > Math.floor(previousHour / 6)) {
+      marketLots = state.marketGenerator.simulateMarketForces(
+        state.marketState.availableLots,
+        newGameTime.totalGameHours
+      );
     }
-  })),
+    
+    return {
+      ...state,
+      gameTime: newGameTime,
+      marketState: {
+        ...state.marketState,
+        availableLots: marketLots,
+        activePurchaseOrders: [...activeOrders, ...recentDelivered],
+        playerListings: [...activeSales, ...completedSales]
+      }
+    };
+  }),
   
   togglePause: () => set(state => ({
     gameTime: { ...state.gameTime, isPaused: !state.gameTime.isPaused }
   })),
   
   setGameSpeed: (speed) => set(state => ({
-    gameTime: { ...state.gameTime, speed }
+    gameTime: { ...state.gameTime, gameSpeed: speed }
   })),
   
   startResearch: (researchId) => {
     // Implementation here
   },
   
+  // LEGACY: acceptContract implementation (old system - being replaced)
   acceptContract: (contractId) => {
-    // Implementation here
+    // TODO: Remove after migration to new contract system
+    console.log('Legacy contract system - use acceptCustomerContract instead');
   },
   
   updateResource: (resource, amount) => set(state => ({
@@ -529,7 +657,288 @@ export const useGameStore = create<GameState>((set, get) => ({
   
   dismissNotification: (id) => set(state => ({
     jobCompletionNotifications: state.jobCompletionNotifications.filter(n => n.id !== id)
-  }))
+  })),
+  
+  // Market action implementations
+  purchaseMarketLot: (lotId, facilityId) => {
+    set(state => {
+      const lot = state.marketState.availableLots.find(l => l.id === lotId);
+      const facility = state.facilities.find(f => f.id === facilityId);
+      
+      if (!lot || !facility) {
+        console.error('Lot or facility not found:', { lotId, facilityId });
+        return state;
+      }
+      
+      // Check if player can afford it
+      if (state.credits < lot.totalPrice) {
+        console.warn('Insufficient credits for purchase:', { required: lot.totalPrice, available: state.credits });
+        return state;
+      }
+      
+      // Create purchase order
+      const purchaseOrder = {
+        id: `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        lotId: lot.id,
+        supplierId: lot.supplierId,
+        materialId: lot.materialId,
+        quantity: lot.quantity,
+        totalPaid: lot.totalPrice,
+        orderedAt: state.gameTime.totalGameHours,
+        deliveryAt: state.gameTime.totalGameHours + lot.deliveryTimeHours,
+        status: 'ordered' as const,
+        facilityId: facility.id
+      };
+      
+      // Deduct credits and add purchase order
+      return {
+        ...state,
+        credits: state.credits - lot.totalPrice,
+        marketState: {
+          ...state.marketState,
+          availableLots: state.marketState.availableLots.filter(l => l.id !== lotId),
+          activePurchaseOrders: [...state.marketState.activePurchaseOrders, purchaseOrder]
+        }
+      };
+    });
+  },
+  
+  listProductForSale: (facilityId, productId, quantity, pricePerUnit) => {
+    set(state => {
+      const facility = state.facilities.find(f => f.id === facilityId);
+      if (!facility) {
+        console.error('Facility not found:', facilityId);
+        return state;
+      }
+      
+      // Check available products in facility storage (look for highest quality first)
+      const qualityLevels = ['pristine', 'standard', 'functional', 'junk'];
+      let availableQuantity = 0;
+      let sourceStorageKey = '';
+      
+      for (const quality of qualityLevels) {
+        const storageKey = `${productId}_${quality}`;
+        const qty = facility.current_storage[storageKey] || 0;
+        if (qty >= quantity) {
+          availableQuantity = qty;
+          sourceStorageKey = storageKey;
+          break;
+        }
+      }
+      
+      if (availableQuantity < quantity) {
+        console.warn('Insufficient products to list for sale:', {
+          requested: quantity,
+          available: availableQuantity,
+          product: productId
+        });
+        return state;
+      }
+      
+      // Determine quality grade from storage key
+      const qualityGrade = sourceStorageKey.split('_').pop() as any;
+      
+      // Create player listing
+      const listing = {
+        id: `listing-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        productId,
+        quantity,
+        pricePerUnit,
+        totalPrice: pricePerUnit * quantity,
+        qualityGrade,
+        listedAt: state.gameTime.totalGameHours,
+        expiresAt: state.gameTime.totalGameHours + 168, // Expires in 1 week
+        soldQuantity: 0,
+        status: 'active' as const
+      };
+      
+      // Remove products from facility storage
+      facility.current_storage[sourceStorageKey] = availableQuantity - quantity;
+      
+      return {
+        ...state,
+        marketState: {
+          ...state.marketState,
+          playerListings: [...state.marketState.playerListings, listing]
+        }
+      };
+    });
+  },
+  
+  removePlayerListing: (listingId) => {
+    set(state => {
+      const listing = state.marketState.playerListings.find(l => l.id === listingId);
+      if (!listing) {
+        console.error('Listing not found:', listingId);
+        return state;
+      }
+      
+      // Return unsold products to facility storage (simplified: return to first facility)
+      const facility = state.facilities[0]; // TODO: Track which facility the listing came from
+      if (facility && listing.status === 'active' && listing.soldQuantity < listing.quantity) {
+        const remainingQuantity = listing.quantity - listing.soldQuantity;
+        const storageKey = `${listing.productId}_${listing.qualityGrade}`;
+        facility.current_storage[storageKey] = (facility.current_storage[storageKey] || 0) + remainingQuantity;
+      }
+      
+      return {
+        ...state,
+        marketState: {
+          ...state.marketState,
+          playerListings: state.marketState.playerListings.filter(l => l.id !== listingId)
+        }
+      };
+    });
+  },
+  
+  refreshMarketLots: () => {
+    set(state => {
+      // Generate new market lots
+      const newLots = state.marketGenerator.generateMarketLots(6, state.gameTime.totalGameHours);
+      
+      // Clean up expired lots and add new ones
+      const cleanedLots = state.marketGenerator.removeExpiredLots(
+        state.marketState.availableLots, 
+        state.gameTime.totalGameHours
+      );
+      
+      // Apply market dynamics to existing lots
+      const dynamicLots = state.marketGenerator.simulateMarketForces(
+        [...cleanedLots, ...newLots],
+        state.gameTime.totalGameHours
+      );
+      
+      return {
+        ...state,
+        marketState: {
+          ...state.marketState,
+          availableLots: dynamicLots,
+          lastLotRefresh: state.gameTime.totalGameHours,
+          nextRefreshAt: state.gameTime.totalGameHours + 24 // Next refresh in 24 hours
+        }
+      };
+    });
+  },
+  
+  // Contract action implementations
+  acceptCustomerContract: (contractId) => {
+    set(state => {
+      const contract = state.contractState.availableCustomerContracts.find(c => c.id === contractId);
+      
+      if (!contract) {
+        console.error('Contract not found:', contractId);
+        return state;
+      }
+      
+      // Move contract from available to active
+      const updatedContract = {
+        ...contract,
+        status: 'accepted' as const,
+        acceptedAt: state.gameTime.totalGameHours
+      };
+      
+      return {
+        ...state,
+        contractState: {
+          ...state.contractState,
+          availableCustomerContracts: state.contractState.availableCustomerContracts.filter(c => c.id !== contractId),
+          activeCustomerContracts: [...state.contractState.activeCustomerContracts, updatedContract]
+        }
+      };
+    });
+  },
+  
+  acceptSupplyContract: (contractId) => {
+    // TODO: Implement supply contract acceptance
+    console.log('Supply contract acceptance not yet implemented:', contractId);
+  },
+  
+  fulfillContract: (contractId, facilityId) => {
+    set(state => {
+      const contract = state.contractState.activeCustomerContracts.find(c => c.id === contractId);
+      const facility = state.facilities.find(f => f.id === facilityId);
+      
+      if (!contract || !facility) {
+        console.error('Contract or facility not found:', { contractId, facilityId });
+        return state;
+      }
+      
+      // Check if we can fulfill the contract
+      const requirement = contract.requirements[0]; // Simplified: assume single requirement
+      if (!requirement) {
+        console.error('Contract has no requirements');
+        return state;
+      }
+      
+      // Look for products in facility storage that meet the requirements
+      const productStorageKey = `${requirement.productId}_pristine`; // Start with highest quality
+      const availableQuantity = facility.current_storage[productStorageKey] || 0;
+      
+      if (availableQuantity < requirement.quantity) {
+        console.warn('Insufficient products to fulfill contract:', {
+          required: requirement.quantity,
+          available: availableQuantity,
+          product: requirement.productId
+        });
+        return state; // Don't fulfill if we don't have enough
+      }
+      
+      // Calculate payment (simplified - full payment for now)
+      const payment = contract.totalPayment;
+      
+      // Check if early delivery bonus applies
+      const currentTime = state.gameTime.totalGameHours;
+      const deadline = (contract.acceptedAt || 0) + contract.deadlineHours;
+      const timeRemaining = deadline - currentTime;
+      const isEarlyDelivery = timeRemaining > 0;
+      const finalPayment = isEarlyDelivery 
+        ? Math.floor(payment * (1 + contract.bonusRate))
+        : payment;
+      
+      // Remove products from storage
+      facility.current_storage[productStorageKey] = availableQuantity - requirement.quantity;
+      
+      // Complete the contract
+      const completedContract = {
+        ...contract,
+        status: 'completed' as const,
+        completedAt: currentTime
+      };
+      
+      return {
+        ...state,
+        credits: state.credits + finalPayment,
+        contractState: {
+          ...state.contractState,
+          activeCustomerContracts: state.contractState.activeCustomerContracts.filter(c => c.id !== contractId),
+          completedContracts: [...state.contractState.completedContracts, completedContract]
+        }
+      };
+    });
+  },
+  
+  refreshContracts: () => {
+    set(state => {
+      // Generate new customer contracts
+      const newContracts = state.contractGenerator.generateCustomerContracts(4, state.gameTime.totalGameHours);
+      
+      // Clean up expired contracts and add new ones
+      const cleanedContracts = state.contractGenerator.removeExpiredContracts(
+        state.contractState.availableCustomerContracts,
+        state.gameTime.totalGameHours
+      );
+      
+      return {
+        ...state,
+        contractState: {
+          ...state.contractState,
+          availableCustomerContracts: [...cleanedContracts, ...newContracts],
+          lastContractRefresh: state.gameTime.totalGameHours,
+          nextRefreshAt: state.gameTime.totalGameHours + 48 // Next refresh in 48 hours
+        }
+      };
+    });
+  }
 }));
 
 // Initialize first facility with starter equipment
@@ -585,9 +994,36 @@ machineManager.setJobCompleteCallback((job) => {
   });
 });
 
+// Initialize market with starting lots
+const marketGenerator = new MarketGenerator();
+const initialMarketLots = marketGenerator.generateMarketLots(8, 0); // Generate 8 lots at game start
+
+// Initialize contracts with starting offers
+const contractGenerator = new ContractGenerator();
+const initialContracts = contractGenerator.generateCustomerContracts(3, 0); // Generate 3 contracts at game start
+
 useGameStore.setState({ 
   facilities: [initialFacility],
   selectedFacilityId: initialFacility.id,
   machineWorkspaceManager: machineManager,
-  machineWorkspace: initialWorkspace
+  machineWorkspace: initialWorkspace,
+  marketState: {
+    availableLots: initialMarketLots,
+    activePurchaseOrders: [],
+    playerListings: [],
+    transactionHistory: [],
+    lastLotRefresh: 0,
+    nextRefreshAt: 24 // Next refresh in 24 hours
+  },
+  contractState: {
+    availableCustomerContracts: initialContracts,
+    availableSupplyContracts: [],
+    activeCustomerContracts: [],
+    activeSupplyContracts: [],
+    contractProgress: new Map(),
+    completedContracts: [],
+    contractHistory: [],
+    lastContractRefresh: 0,
+    nextRefreshAt: 48 // Next refresh in 48 hours
+  }
 });

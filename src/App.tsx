@@ -10,17 +10,22 @@ function App() {
   const credits = useGameStore((state) => state.credits)
   const updateGameTime = useGameStore((state) => state.updateGameTime)
   const togglePause = useGameStore((state) => state.togglePause)
+  const setGameSpeed = useGameStore((state) => state.setGameSpeed)
   const updateProduction = useGameStore((state) => state.updateProduction)
   
-  // Global game clock - runs every second
+  // Global game clock - runs every second, but game speed affects time passage
   useEffect(() => {
     const interval = setInterval(() => {
-      updateGameTime(1000) // 1 second elapsed
-      updateProduction() // Update production systems
+      if (!gameTime.isPaused) {
+        // Apply game speed multiplier to time passage
+        const effectiveMs = 1000 * gameTime.gameSpeed;
+        updateGameTime(effectiveMs) // Game time elapsed based on speed
+        updateProduction() // Update production systems
+      }
     }, 1000)
     
     return () => clearInterval(interval)
-  }, [updateGameTime, updateProduction])
+  }, [updateGameTime, updateProduction, gameTime.isPaused, gameTime.gameSpeed])
   
   return (
     <div className="min-h-screen bg-gray-950 p-4">
@@ -37,11 +42,26 @@ function App() {
               <span className="text-gray-400">TIME:</span>
               <span className="text-teal-400 font-mono ml-2">{formatGameTime(gameTime)}</span>
             </div>
-            <div className="text-sm">
-              <span className="text-gray-400">SPEED:</span>
-              <span className={`font-mono ml-2 ${gameTime.isPaused ? 'text-orange-400' : 'text-teal-400'}`}>
+            <div className="flex items-center space-x-2">
+              <span className="text-gray-400 text-sm">SPEED:</span>
+              <span className={`font-mono text-sm ${gameTime.isPaused ? 'text-orange-400' : 'text-teal-400'}`}>
                 {formatGameSpeed(gameTime.isPaused ? 0 : gameTime.gameSpeed)}
               </span>
+              <div className="flex space-x-1 ml-2">
+                {[1, 2, 5, 10].map(speed => (
+                  <button
+                    key={speed}
+                    onClick={() => setGameSpeed(speed)}
+                    className={`px-2 py-1 text-xs font-mono rounded transition-colors border ${
+                      gameTime.gameSpeed === speed
+                        ? 'bg-teal-600 border-teal-500 text-white'
+                        : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {speed}x
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="text-sm">
               <span className="text-gray-400">CREDITS:</span>
