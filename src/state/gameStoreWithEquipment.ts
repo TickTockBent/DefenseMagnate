@@ -262,13 +262,15 @@ export const useGameStore = create<GameState>((set, get) => ({
         return f;
       });
       
-      // Reinitialize machine workspace for the updated facility if it's currently selected
+      // Add new equipment to existing workspace (preserves jobs and progress)
       let updatedWorkspace = state.machineWorkspace;
       if (state.selectedFacilityId === facilityId && state.machineWorkspace) {
         const updatedFacility = updatedFacilities.find(f => f.id === facilityId);
         if (updatedFacility) {
           state.machineWorkspaceManager.setFacility(updatedFacility);
-          updatedWorkspace = state.machineWorkspaceManager.initializeWorkspace(updatedFacility);
+          // Instead of reinitializing, just add the new equipment
+          state.machineWorkspaceManager.addEquipmentToWorkspace(updatedFacility, newInstance);
+          updatedWorkspace = state.machineWorkspaceManager.getWorkspace(facilityId);
         }
       }
       
@@ -311,13 +313,15 @@ export const useGameStore = create<GameState>((set, get) => ({
         return f;
       });
       
-      // Reinitialize machine workspace for the updated facility if it's currently selected
+      // Remove equipment from existing workspace (preserves other jobs and progress)
       let updatedWorkspace = state.machineWorkspace;
       if (state.selectedFacilityId === facilityId && state.machineWorkspace) {
         const updatedFacility = updatedFacilities.find(f => f.id === facilityId);
         if (updatedFacility) {
           state.machineWorkspaceManager.setFacility(updatedFacility);
-          updatedWorkspace = state.machineWorkspaceManager.initializeWorkspace(updatedFacility);
+          // Instead of reinitializing, just remove the specific equipment
+          state.machineWorkspaceManager.removeEquipmentFromWorkspace(facilityId, equipmentInstanceId);
+          updatedWorkspace = state.machineWorkspaceManager.getWorkspace(facilityId);
         }
       }
       

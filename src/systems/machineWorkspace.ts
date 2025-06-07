@@ -96,6 +96,73 @@ export class MachineWorkspaceManager {
     return workspace;
   }
   
+  // Add new equipment to existing workspace (preserves jobs and progress)
+  addEquipmentToWorkspace(facility: Facility, newEquipment: EquipmentInstance): void {
+    const workspace = this.workspaces.get(facility.id);
+    if (!workspace) {
+      // If no workspace exists, initialize normally
+      this.initializeWorkspace(facility);
+      return;
+    }
+    
+    const def = this.equipmentDefinitions.get(newEquipment.equipmentId);
+    if (!def) return;
+    
+    // Check if this equipment should have a work slot (same logic as initializeWorkspace)
+    let shouldCreateSlot = false;
+    
+    for (const tag of def.tags) {
+      if (tag.category === TagCategory.SURFACE ||
+          tag.category === TagCategory.TURNING ||
+          tag.category === TagCategory.MILLING ||
+          tag.category === TagCategory.DRILLING ||
+          tag.category === TagCategory.BASIC_MANIPULATION ||
+          tag.category === TagCategory.PRECISION_MANIPULATION) {
+        shouldCreateSlot = true;
+        break;
+      }
+    }
+    
+    // Don't create slots for storage equipment
+    if (newEquipment.equipmentId === 'storage_basic' || 
+        newEquipment.equipmentId === 'storage_industrial') {
+      shouldCreateSlot = false;
+    }
+    
+    if (shouldCreateSlot) {
+      const slot: MachineSlot = {
+        id: `slot-${newEquipment.id}`,
+        machineId: newEquipment.id,
+        maxCapacity: 1
+      };
+      workspace.machines.set(newEquipment.id, slot);
+      console.log(`Added machine slot for new ${def.name} (${newEquipment.id})`);
+    }
+  }
+  
+  // Remove equipment from existing workspace (preserves other jobs and progress)
+  removeEquipmentFromWorkspace(facilityId: string, equipmentInstanceId: string): void {
+    const workspace = this.workspaces.get(facilityId);
+    if (!workspace) return;
+    
+    // Check if this equipment has a machine slot
+    const slot = workspace.machines.get(equipmentInstanceId);
+    if (!slot) return;
+    
+    // If the machine has a current job, we need to handle it
+    if (slot.currentJob) {
+      console.log(`Moving job ${slot.currentJob.id} back to queue as equipment ${equipmentInstanceId} is being removed`);
+      // Reset job state and return to queue
+      slot.currentJob.state = 'queued';
+      slot.currentJob.currentMachineId = undefined;
+      workspace.jobQueue.unshift(slot.currentJob); // Add to front of queue
+    }
+    
+    // Remove the machine slot
+    workspace.machines.delete(equipmentInstanceId);
+    console.log(`Removed machine slot for equipment ${equipmentInstanceId}`);
+  }
+  
   // Add a new job to the facility queue
   addJob(
     facilityId: string,
