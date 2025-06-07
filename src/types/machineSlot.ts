@@ -18,6 +18,7 @@ export interface MachineSlot {
     stepIndex: number;
     startTime: number;
     estimatedCompletion: number;
+    lastUpdateTime?: number; // Real-time timestamp for interpolation
   };
 }
 

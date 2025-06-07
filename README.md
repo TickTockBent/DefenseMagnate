@@ -12,7 +12,32 @@ Defense Magnate is a browser-based management simulation where you:
 - **Fulfill contracts** with quality requirements and deadline pressure
 - **Build your business** through the complete acquire-manufacture-sell cycle
 
-## 🔧 Recent Updates - Materials & Contracts v1 Complete ✅
+## 🔧 Recent Updates
+
+### 📋 **Patch Notes v1.3 - Optimization & Cleanup Arc (January 2025)** ⚡
+
+This focused arc improved performance and responsiveness while cleaning up legacy technical debt.
+
+#### **🚀 Real-Time UI Performance**
+- **✨ Smooth Progress Bars**: Added requestAnimationFrame-based interpolation for seamless progress updates
+- **⏱️ Real-Time Countdowns**: Time remaining now updates continuously instead of discrete 1-second jumps
+- **⚸ Activity Indicators**: Machine spinners and progress bars now animate smoothly between store updates
+- **⏸️ Pause Handling**: Real-time updates properly respect game pause state
+- **📱 Responsive Feel**: UI now feels much more responsive and performant during production
+
+#### **🧹 Legacy Code Cleanup**
+- **🗑️ Removed Unused Components**: Eliminated 6 legacy components (ManufacturingContentEnhanced, ProductionOverviewPanel, etc.)
+- **⚡ Timer Optimization**: Removed redundant update timers from legacy manufacturing system
+- **🔧 Import Cleanup**: Fixed unused imports and improved TypeScript compliance
+- **📦 Component Consolidation**: Kept EquipmentPanelSimple, removed complex EquipmentPanel
+- **🎯 Type Safety**: Enhanced TypeScript types with proper lastUpdateTime tracking
+
+#### **⚙️ Performance Improvements**
+- **🔄 Dual Update System**: Real-time interpolation works alongside discrete game logic updates
+- **🎬 Animation Optimization**: Proper cleanup of animation frames to prevent memory leaks  
+- **📊 Progress Calculation**: Smooth progress calculation with proper clamping at 100%
+- **⏰ Completion Status**: Shows "Completing..." when jobs reach 100% but await processing
+- **🚀 Build Optimization**: Faster builds with reduced bundle size from removed components
 
 ### 📋 **Patch Notes v1.2 - Materials & Contracts Arc (December 2024)**
 
@@ -215,6 +240,7 @@ Three basic sidearm manufacturing methods available:
 
 ## 🎯 Current Status
 
+**Optimization & Cleanup Arc: ✅ COMPLETE**  
 **Materials & Contracts v1: ✅ COMPLETE**  
 **Manufacturing v1: ✅ COMPLETE**
 

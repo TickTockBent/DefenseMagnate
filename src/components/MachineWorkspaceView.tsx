@@ -1,13 +1,12 @@
 // Machine Workspace View - Shows machines with job slots
 
 import { useGameStore } from '../state/gameStoreWithEquipment';
-import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility, MachineBasedMethod } from '../types';
+import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility } from '../types';
 import { Equipment, EquipmentInstance } from '../types';
 import { formatGameTime } from '../utils/gameClock';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
 import { inventoryManager } from '../utils/inventoryManager';
-// LEGACY: import { JobState } from '../constants/enums'; // No longer needed with new machine workspace system
 
 // Helper function to format product names for display
 function formatProductName(productId: string): string {
@@ -57,59 +56,102 @@ function MachineSpinner({ equipmentId, isActive }: { equipmentId: string; isActi
 }
 
 function MachineCard({ equipment, definition, slot, currentTime }: MachineCardProps) {
+  const [realTimeProgress, setRealTimeProgress] = useState(0);
+  const [realTimeRemaining, setRealTimeRemaining] = useState('N/A');
+  const animationFrameRef = useRef<number | null>(null);
+  const gameTime = useGameStore((state) => state.gameTime);
+  
   const getProgressBar = (progress: number) => {
     const filled = Math.floor(progress * 10);
     const empty = 10 - filled;
     return '█'.repeat(filled) + '░'.repeat(empty);
   };
   
-  const getTimeRemaining = () => {
-    if (!slot.currentJob || !slot.currentProgress) return 'N/A';
-    
-    // All times are now in game hours
-    const elapsed = currentTime - slot.currentProgress.startTime;
-    const duration = slot.currentProgress.estimatedCompletion - slot.currentProgress.startTime;
-    const remaining = Math.max(0, duration - elapsed);
-    
-    // Convert game hours to minutes for display
-    const remainingMinutes = Math.floor(remaining * 60);
-    const remainingSeconds = Math.floor((remaining * 3600) % 60);
-    
-    if (isNaN(remainingMinutes) || isNaN(remainingSeconds)) {
-      console.log('Time calculation error:', {
-        elapsed,
-        duration,
-        remaining,
-        estimatedCompletion: slot.currentProgress.estimatedCompletion,
-        startTime: slot.currentProgress.startTime,
-        currentTime
-      });
-      return 'ERROR';
+  const updateRealTimeProgress = useCallback(() => {
+    if (!slot.currentJob || !slot.currentProgress) {
+      setRealTimeProgress(0);
+      setRealTimeRemaining('N/A');
+      return;
     }
     
-    return `${remainingMinutes}m ${remainingSeconds}s`;
-  };
-  
-  const getProgress = () => {
-    if (!slot.currentJob || !slot.currentProgress) return 0;
+    const realTimeMs = Date.now();
+    const gameSpeed = gameTime.gameSpeed || 1;
+    const isPaused = gameTime.isPaused;
     
-    // All times are now in game hours
-    const elapsed = currentTime - slot.currentProgress.startTime;
+    if (isPaused) {
+      // When paused, use the store's current progress without interpolation
+      const elapsed = currentTime - slot.currentProgress.startTime;
+      const duration = slot.currentProgress.estimatedCompletion - slot.currentProgress.startTime;
+      const progress = duration > 0 ? elapsed / duration : 0;
+      const clampedProgress = Math.min(1, Math.max(0, progress));
+      
+      setRealTimeProgress(clampedProgress);
+      
+      const remaining = Math.max(0, duration - elapsed);
+      const remainingMinutes = Math.floor(remaining * 60);
+      const remainingSeconds = Math.floor((remaining * 3600) % 60);
+      setRealTimeRemaining(`${remainingMinutes}m ${remainingSeconds}s`);
+      return;
+    }
+    
+    // Calculate real-time progress using actual time passage
+    const msPerGameHour = 60000 / gameSpeed; // 1 game hour = 60000ms / gameSpeed
+    const lastUpdateTime = slot.currentProgress.lastUpdateTime || realTimeMs;
+    
+    // Calculate how much game time has passed since the last store update
+    const realTimeSinceUpdate = realTimeMs - lastUpdateTime;
+    const gameTimeSinceUpdate = realTimeSinceUpdate / msPerGameHour;
+    
+    // Add interpolated time to the store's current time
+    const interpolatedCurrentTime = currentTime + gameTimeSinceUpdate;
+    
+    const elapsed = interpolatedCurrentTime - slot.currentProgress.startTime;
     const duration = slot.currentProgress.estimatedCompletion - slot.currentProgress.startTime;
     const progress = duration > 0 ? elapsed / duration : 0;
     
-    if (isNaN(progress)) {
-      console.log('Progress calculation error:', {
-        elapsed,
-        duration,
-        estimatedCompletion: slot.currentProgress.estimatedCompletion,
-        startTime: slot.currentProgress.startTime
-      });
-      return 0;
+    // Clamp progress to prevent going over 100% while waiting for store update
+    const clampedProgress = Math.min(1, Math.max(0, progress));
+    setRealTimeProgress(clampedProgress);
+    
+    // Calculate real-time remaining (never go negative)
+    const remaining = Math.max(0, duration - elapsed);
+    const remainingMinutes = Math.floor(remaining * 60);
+    const remainingSeconds = Math.floor((remaining * 3600) % 60);
+    
+    if (clampedProgress >= 1) {
+      // When complete, show completion status
+      setRealTimeRemaining('Completing...');
+    } else if (!isNaN(remainingMinutes) && !isNaN(remainingSeconds)) {
+      setRealTimeRemaining(`${remainingMinutes}m ${remainingSeconds}s`);
+    } else {
+      setRealTimeRemaining('Calculating...');
+    }
+  }, [slot, currentTime, gameTime]);
+  
+  // Real-time animation loop
+  useEffect(() => {
+    if (!slot.currentJob) {
+      setRealTimeProgress(0);
+      setRealTimeRemaining('N/A');
+      return;
     }
     
-    return Math.min(1, Math.max(0, progress));
-  };
+    const animate = () => {
+      updateRealTimeProgress();
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+    
+    animationFrameRef.current = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [slot.currentJob, updateRealTimeProgress]);
+  
+  const getTimeRemaining = () => realTimeRemaining;
+  const getProgress = () => realTimeProgress;
   
   return (
     <div className="border border-teal-400 bg-gray-900 p-2 relative">
@@ -476,8 +518,7 @@ export function MachineWorkspaceView() {
     selectedFacilityId, 
     equipmentDatabase, 
     machineWorkspace: workspace, 
-    gameTime, 
-    startMachineJob 
+    gameTime
   } = useGameStore();
   
   const facility = facilities.find(f => f.id === selectedFacilityId);
