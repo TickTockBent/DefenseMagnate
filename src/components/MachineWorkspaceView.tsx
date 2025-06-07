@@ -307,7 +307,7 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                   let available: number;
                   if (facility.inventory) {
                     if (mat.required_tags && mat.required_tags.length > 0) {
-                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags);
+                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags, mat.max_quality);
                     } else {
                       available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
                     }
@@ -363,7 +363,7 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                                 let available: number;
                                 if (facility.inventory) {
                                   if (mat.required_tags && mat.required_tags.length > 0) {
-                                    available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags);
+                                    available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags, mat.max_quality);
                                   } else {
                                     available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
                                   }
@@ -375,10 +375,13 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                                 const tagDisplay = mat.required_tags && mat.required_tags.length > 0 
                                   ? ` [${mat.required_tags.join(', ')}]` 
                                   : '';
+                                const qualityDisplay = mat.max_quality !== undefined 
+                                  ? ` (≤${mat.max_quality}%)` 
+                                  : '';
                                 
                                 return (
                                   <div key={idx} className={hasEnough ? "text-gray-400" : "text-red-400"}>
-                                    • {mat.material_id}{tagDisplay}: {mat.quantity} {mat.consumed_at_start ? '(consumed at start)' : '(consumed at end)'}
+                                    • {mat.material_id}{tagDisplay}{qualityDisplay}: {mat.quantity} {mat.consumed_at_start ? '(consumed at start)' : '(consumed at end)'}
                                     <span className="ml-2 text-xs">
                                       (Available: {available})
                                     </span>

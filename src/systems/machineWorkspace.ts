@@ -233,8 +233,8 @@ export class MachineWorkspaceManager {
         if (facility.inventory) {
           let available: number;
           if (mat.required_tags && mat.required_tags.length > 0) {
-            // Count items with specific tags
-            available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags);
+            // Count items with specific tags and quality constraints
+            available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags, mat.max_quality);
           } else {
             // Count all items of this type
             available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
@@ -267,12 +267,13 @@ export class MachineWorkspaceManager {
         if (facility.inventory) {
           let itemsToConsume: any[];
           if (mat.required_tags && mat.required_tags.length > 0) {
-            // Find items with specific tags
+            // Find items with specific tags and quality constraints
             itemsToConsume = inventoryManager.getBestQualityItemsWithTags(
               facility.inventory, 
               mat.material_id, 
               needed,
-              mat.required_tags
+              mat.required_tags,
+              mat.max_quality
             );
           } else {
             // Find best quality items of any type

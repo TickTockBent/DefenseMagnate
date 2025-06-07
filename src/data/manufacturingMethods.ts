@@ -466,7 +466,7 @@ export const tacticalKnifeRestoreMethod: MachineBasedMethod = {
       },
       baseDurationMinutes: 8,
       material_requirements: [
-        { material_id: 'tactical_knife', quantity: 1, consumed_at_start: true, required_tags: [ItemTag.DAMAGED] }
+        { material_id: 'tactical_knife', quantity: 1, consumed_at_start: true, required_tags: [ItemTag.SALVAGED], max_quality: 35 }
       ],
       can_fail: false,
       failure_chance: 0,
@@ -558,7 +558,7 @@ export const tacticalKnifeSharpenMethod: MachineBasedMethod = {
       },
       baseDurationMinutes: 3,
       material_requirements: [
-        { material_id: 'tactical_knife', quantity: 1, consumed_at_start: true, required_tags: [ItemTag.SALVAGED] }
+        { material_id: 'tactical_knife', quantity: 1, consumed_at_start: true, required_tags: [ItemTag.SALVAGED], max_quality: 55 }
       ],
       can_fail: false,
       failure_chance: 0,

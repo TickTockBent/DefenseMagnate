@@ -49,6 +49,7 @@ export interface MachineOperation {
     quantity: number;
     consumed_at_start: boolean;
     required_tags?: ItemTag[]; // Items must have these tags to be consumed
+    max_quality?: number; // Items must be below this quality level to be consumed
   }>;
   
   // Quality and failure

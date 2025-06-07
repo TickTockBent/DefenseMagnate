@@ -234,8 +234,8 @@ export class InventoryManager {
     return matchingSlot?.totalQuantity || 0;
   }
   
-  // Get available quantity of items with specific tags
-  getAvailableQuantityWithTags(inventory: FacilityInventory, baseItemId: string, requiredTags: ItemTag[]): number {
+  // Get available quantity of items with specific tags and quality constraints
+  getAvailableQuantityWithTags(inventory: FacilityInventory, baseItemId: string, requiredTags: ItemTag[], maxQuality?: number): number {
     const baseItem = getBaseItem(baseItemId);
     if (!baseItem) return 0;
     
@@ -245,16 +245,18 @@ export class InventoryManager {
     const slot = group.slots.find(s => s.baseItemId === baseItemId);
     if (!slot) return 0;
     
-    // Sum quantities of instances that have all required tags
+    // Sum quantities of instances that have all required tags and meet quality constraints
     return slot.stack.instances
       .filter(instance => {
-        return requiredTags.every(tag => instance.tags.includes(tag));
+        const hasRequiredTags = requiredTags.every(tag => instance.tags.includes(tag));
+        const meetsQualityConstraint = maxQuality === undefined || instance.quality <= maxQuality;
+        return hasRequiredTags && meetsQualityConstraint;
       })
       .reduce((sum, instance) => sum + instance.quantity, 0);
   }
   
   // Get best quality items with specific tags up to specified quantity
-  getBestQualityItemsWithTags(inventory: FacilityInventory, baseItemId: string, quantity: number, requiredTags: ItemTag[]): ItemInstance[] {
+  getBestQualityItemsWithTags(inventory: FacilityInventory, baseItemId: string, quantity: number, requiredTags: ItemTag[], maxQuality?: number): ItemInstance[] {
     const baseItem = getBaseItem(baseItemId);
     if (!baseItem) return [];
     
@@ -264,10 +266,12 @@ export class InventoryManager {
     const slot = group.slots.find(s => s.baseItemId === baseItemId);
     if (!slot) return [];
     
-    // Filter instances that have all required tags, then sort by quality (highest first)
+    // Filter instances that have all required tags and meet quality constraints, then sort by quality (highest first)
     const matchingInstances = slot.stack.instances
       .filter(instance => {
-        return requiredTags.every(tag => instance.tags.includes(tag));
+        const hasRequiredTags = requiredTags.every(tag => instance.tags.includes(tag));
+        const meetsQualityConstraint = maxQuality === undefined || instance.quality <= maxQuality;
+        return hasRequiredTags && meetsQualityConstraint;
       })
       .sort((a, b) => b.quality - a.quality);
     
