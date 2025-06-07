@@ -748,32 +748,60 @@ export const useGameStore = create<GameState>((set, get) => ({
         return state;
       }
       
-      // Check available products in facility storage (look for highest quality first)
-      const qualityLevels = ['pristine', 'standard', 'functional', 'junk'];
       let availableQuantity = 0;
-      let sourceStorageKey = '';
+      let qualityGrade = 'standard';
+      let itemsToRemove: ItemInstance[] = [];
       
-      for (const quality of qualityLevels) {
-        const storageKey = `${productId}_${quality}`;
-        const qty = facility.current_storage[storageKey] || 0;
-        if (qty >= quantity) {
-          availableQuantity = qty;
-          sourceStorageKey = storageKey;
-          break;
+      if (facility.inventory) {
+        // Use new inventory system - get best quality items
+        const totalAvailable = inventoryManager.getAvailableQuantity(facility.inventory, productId);
+        if (totalAvailable < quantity) {
+          console.warn('Insufficient products to list for sale:', {
+            requested: quantity,
+            available: totalAvailable,
+            product: productId
+          });
+          return state;
         }
+        
+        // Get the best quality items for this product
+        itemsToRemove = inventoryManager.getBestQualityItems(facility.inventory, productId, quantity);
+        availableQuantity = itemsToRemove.reduce((sum, item) => sum + item.quantity, 0);
+        
+        // Calculate average quality and determine grade
+        const totalQualityPoints = itemsToRemove.reduce((sum, item) => sum + (item.quality * item.quantity), 0);
+        const avgQuality = totalQualityPoints / availableQuantity;
+        qualityGrade = avgQuality >= 90 ? 'pristine' : 
+                      avgQuality >= 75 ? 'functional' : 
+                      avgQuality >= 50 ? 'standard' : 'junk';
+      } else {
+        // Fall back to legacy storage system
+        const qualityLevels = ['pristine', 'standard', 'functional', 'junk'];
+        let sourceStorageKey = '';
+        
+        for (const quality of qualityLevels) {
+          const storageKey = `${productId}_${quality}`;
+          const qty = facility.current_storage[storageKey] || 0;
+          if (qty >= quantity) {
+            availableQuantity = qty;
+            sourceStorageKey = storageKey;
+            qualityGrade = quality;
+            break;
+          }
+        }
+        
+        if (availableQuantity < quantity) {
+          console.warn('Insufficient products to list for sale:', {
+            requested: quantity,
+            available: availableQuantity,
+            product: productId
+          });
+          return state;
+        }
+        
+        // Remove from legacy storage
+        facility.current_storage[sourceStorageKey] = availableQuantity - quantity;
       }
-      
-      if (availableQuantity < quantity) {
-        console.warn('Insufficient products to list for sale:', {
-          requested: quantity,
-          available: availableQuantity,
-          product: productId
-        });
-        return state;
-      }
-      
-      // Determine quality grade from storage key
-      const qualityGrade = sourceStorageKey.split('_').pop() as any;
       
       // Create player listing
       const listing = {
@@ -789,8 +817,12 @@ export const useGameStore = create<GameState>((set, get) => ({
         status: 'active' as const
       };
       
-      // Remove products from facility storage
-      facility.current_storage[sourceStorageKey] = availableQuantity - quantity;
+      // Remove products from inventory (new system only)
+      if (facility.inventory && itemsToRemove.length > 0) {
+        for (const item of itemsToRemove) {
+          inventoryManager.removeItem(facility.inventory, item.id, item.quantity);
+        }
+      }
       
       return {
         ...state,
@@ -814,8 +846,31 @@ export const useGameStore = create<GameState>((set, get) => ({
       const facility = state.facilities[0]; // TODO: Track which facility the listing came from
       if (facility && listing.status === 'active' && listing.soldQuantity < listing.quantity) {
         const remainingQuantity = listing.quantity - listing.soldQuantity;
-        const storageKey = `${listing.productId}_${listing.qualityGrade}`;
-        facility.current_storage[storageKey] = (facility.current_storage[storageKey] || 0) + remainingQuantity;
+        
+        if (facility.inventory) {
+          // Use new inventory system - create item instance to return
+          const qualityValue = listing.qualityGrade === 'pristine' ? 95 : 
+                               listing.qualityGrade === 'functional' ? 80 : 
+                               listing.qualityGrade === 'standard' ? 65 : 45;
+          
+          const returnedItem = createItemInstance({
+            baseItemId: listing.productId,
+            tags: [ItemTag.REFURBISHED], // Mark returned items as refurbished
+            quality: qualityValue,
+            quantity: remainingQuantity,
+            metadata: {
+              source: 'market_return',
+              originalListingId: listingId,
+              returnedAt: state.gameTime.totalGameHours
+            }
+          });
+          
+          inventoryManager.addItem(facility.inventory, returnedItem);
+        } else {
+          // Fall back to legacy storage
+          const storageKey = `${listing.productId}_${listing.qualityGrade}`;
+          facility.current_storage[storageKey] = (facility.current_storage[storageKey] || 0) + remainingQuantity;
+        }
       }
       
       return {

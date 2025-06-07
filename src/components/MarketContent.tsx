@@ -288,19 +288,45 @@ function ProductListingInterface({ facility }: ProductListingInterfaceProps) {
   const [listing, setListing] = useState(false);
   const { listProductForSale } = useGameStore();
   
-  // Get available products from facility storage
-  const availableProducts = Object.keys(facility.current_storage)
-    .filter(key => key.includes('_') && facility.current_storage[key] > 0)
-    .map(key => {
-      const [productId, quality] = key.split('_');
-      return {
-        key,
-        productId,
-        quality,
-        quantity: facility.current_storage[key]
-      };
-    })
-    .filter(item => ['basic_sidearm', 'tactical_knife'].includes(item.productId));
+  // Get available products from facility inventory (new system) or legacy storage
+  const availableProducts = facility.inventory ? 
+    // Use new inventory system
+    Array.from(facility.inventory.groups.values())
+      .flatMap(group => group.slots)
+      .filter(slot => ['basic_sidearm', 'tactical_knife'].includes(slot.baseItemId))
+      .filter(slot => slot.available > 0)
+      .map(slot => {
+        const tags = slot.stack.uniqueTags;
+        const quality = slot.stack.averageQuality;
+        const qualityLabel = quality >= 90 ? 'pristine' : 
+                            quality >= 75 ? 'functional' : 
+                            quality >= 50 ? 'standard' : 'junk';
+        const tagLabels = tags.join(', ');
+        
+        return {
+          key: `${slot.baseItemId}_${qualityLabel}_${tags.join('_')}`,
+          productId: slot.baseItemId,
+          quality: qualityLabel,
+          tags: tagLabels,
+          quantity: slot.available,
+          averageQuality: quality
+        };
+      }) :
+    // Fall back to legacy storage
+    Object.keys(facility.current_storage)
+      .filter(key => key.includes('_') && facility.current_storage[key] > 0)
+      .map(key => {
+        const [productId, quality] = key.split('_');
+        return {
+          key,
+          productId,
+          quality,
+          tags: '',
+          quantity: facility.current_storage[key],
+          averageQuality: 0
+        };
+      })
+      .filter(item => ['basic_sidearm', 'tactical_knife'].includes(item.productId));
   
   const handleListProduct = () => {
     if (!selectedProduct || quantity <= 0 || pricePerUnit <= 0) return;
@@ -326,7 +352,13 @@ function ProductListingInterface({ facility }: ProductListingInterfaceProps) {
       
       {availableProducts.length === 0 ? (
         <div className="text-center text-gray-500 py-4">
-          No manufactured products available to sell. Complete manufacturing jobs first.
+          <div>No manufactured products available to sell.</div>
+          <div className="text-xs mt-2">Complete manufacturing jobs to create products, then return here to list them for sale.</div>
+          {facility.inventory && (
+            <div className="text-xs mt-1 text-gray-400">
+              Inventory system: {facility.inventory.totalItems} total items stored
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -341,7 +373,7 @@ function ProductListingInterface({ facility }: ProductListingInterfaceProps) {
               <option value="">-- Choose Product --</option>
               {availableProducts.map(product => (
                 <option key={product.key} value={product.key}>
-                  {formatMaterialName(product.productId)} ({product.quality}) - {product.quantity} available
+                  {formatMaterialName(product.productId)} ({product.quality}){product.tags && ` [${product.tags}]`} - {product.quantity} available
                 </option>
               ))}
             </select>
@@ -378,7 +410,7 @@ function ProductListingInterface({ facility }: ProductListingInterfaceProps) {
               <div className="bg-gray-800 p-2 rounded">
                 <div className="text-xs text-gray-400">Listing Summary:</div>
                 <div className="text-sm text-white">
-                  {quantity}x {formatMaterialName(selectedProductInfo.productId)} ({selectedProductInfo.quality})
+                  {quantity}x {formatMaterialName(selectedProductInfo.productId)} ({selectedProductInfo.quality}){selectedProductInfo.tags && ` [${selectedProductInfo.tags}]`}
                 </div>
                 <div className="text-sm text-teal-400 font-mono">
                   Total Value: {(quantity * pricePerUnit).toLocaleString()}cr
@@ -503,8 +535,15 @@ export function MarketContent() {
       )}
       
       {/* Product Listing Interface */}
-      {currentFacility && (
+      {currentFacility ? (
         <ProductListingInterface facility={currentFacility} />
+      ) : (
+        <div className="terminal-card border-yellow-600">
+          <h3 className="text-gray-400 font-bold mb-3">LIST PRODUCTS FOR SALE</h3>
+          <div className="text-center text-yellow-400 py-4">
+            No facility selected. Please select a facility to list products for sale.
+          </div>
+        </div>
       )}
       
       {/* Available Material Lots */}
