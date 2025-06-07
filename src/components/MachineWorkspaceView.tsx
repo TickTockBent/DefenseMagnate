@@ -1,7 +1,7 @@
 // Machine Workspace View - Shows machines with job slots
 
 import { useGameStore } from '../state/gameStoreWithEquipment';
-import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility, MachineBasedMethod } from '../types';
+import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility } from '../types';
 import { Equipment, EquipmentInstance } from '../types';
 import { formatGameTime } from '../utils/gameClock';
 import { useState, useEffect, useRef, useCallback } from 'react';
