@@ -3,7 +3,8 @@
 import { 
   MachineBasedMethod, 
   MachineOperation,
-  TagCategory 
+  TagCategory,
+  ItemTag
 } from '../types';
 
 // Basic Sidearm - Forge New Method
@@ -11,6 +12,10 @@ export const basicSidearmForgeMethod: MachineBasedMethod = {
   id: 'basic_sidearm_forge',
   name: 'Forge New',
   description: 'Manufacture a new sidearm from raw materials',
+  
+  // Output configuration for new inventory system
+  outputTags: [ItemTag.FORGED],
+  qualityRange: [80, 95],
   
   operations: [
     // Operation 1: Material Preparation (Workbench)
@@ -121,8 +126,10 @@ export const basicSidearmForgeMethod: MachineBasedMethod = {
     }
   ],
   
+  // Legacy output configuration
   output_state: 'pristine',
   output_quality_range: [80, 95],
+  outputTags: [ItemTag.FORGED], // NEW: Produces forged quality items
   labor_cost_multiplier: 1.5,
   complexity_rating: 5,
   profit_margin_modifier: 1.3,
@@ -136,6 +143,10 @@ export const basicSidearmRestoreMethod: MachineBasedMethod = {
   name: 'Restore Damaged',
   description: 'Restore a damaged weapon to functional condition',
   
+  // Output configuration for new inventory system
+  outputTags: [ItemTag.RESTORED],
+  qualityRange: [60, 80],
+  
   operations: [
     // Operation 1: Disassembly (Workbench)
     {
@@ -148,7 +159,7 @@ export const basicSidearmRestoreMethod: MachineBasedMethod = {
       },
       baseDurationMinutes: 15, // 15 game minutes
       material_requirements: [
-        { material_id: 'damaged_basic_sidearm', quantity: 1, consumed_at_start: true }
+        { material_id: 'basic_sidearm', quantity: 1, consumed_at_start: true, required_tags: [ItemTag.DAMAGED] }
       ],
       can_fail: false,
       failure_chance: 0,
@@ -225,6 +236,7 @@ export const basicSidearmRestoreMethod: MachineBasedMethod = {
     }
   ],
   
+  // Legacy output configuration
   output_state: 'functional',
   output_quality_range: [60, 80],
   labor_cost_multiplier: 0.8,
@@ -239,6 +251,11 @@ export const basicSidearmCobbleMethod: MachineBasedMethod = {
   id: 'basic_sidearm_cobble',
   name: 'Cobble Together',
   description: 'Create a crude but functional weapon from scrap',
+  
+  // Output configuration for new inventory system
+  outputTags: [ItemTag.JUNK],
+  qualityRange: [30, 45],
+  qualityCap: 45,
   
   operations: [
     // Operation 1: Improvised Assembly (Workbench)
@@ -280,6 +297,7 @@ export const basicSidearmCobbleMethod: MachineBasedMethod = {
     }
   ],
   
+  // Legacy output configuration
   output_state: 'junk',
   output_quality_range: [30, 50],
   labor_cost_multiplier: 0.5,
@@ -303,6 +321,10 @@ export const tacticalKnifeForgeMethod: MachineBasedMethod = {
   id: 'tactical_knife_forge',
   name: 'Forge New',
   description: 'Craft a high-quality tactical knife from raw materials',
+  
+  // Output configuration for new inventory system
+  outputTags: [ItemTag.FORGED],
+  qualityRange: [85, 98],
   
   operations: [
     // Operation 1: Material Preparation (Workbench)
@@ -412,6 +434,7 @@ export const tacticalKnifeForgeMethod: MachineBasedMethod = {
     }
   ],
   
+  // Legacy output configuration
   output_state: 'pristine',
   output_quality_range: [85, 98],
   labor_cost_multiplier: 1.3,
@@ -427,6 +450,10 @@ export const tacticalKnifeRestoreMethod: MachineBasedMethod = {
   name: 'Restore Damaged',
   description: 'Restore a damaged knife to functional condition',
   
+  // Output configuration for new inventory system
+  outputTags: [ItemTag.RESTORED],
+  qualityRange: [70, 85],
+  
   operations: [
     // Operation 1: Damage Assessment (Measuring Tools)
     {
@@ -439,7 +466,7 @@ export const tacticalKnifeRestoreMethod: MachineBasedMethod = {
       },
       baseDurationMinutes: 8,
       material_requirements: [
-        { material_id: 'damaged_tactical_knife', quantity: 1, consumed_at_start: true }
+        { material_id: 'tactical_knife', quantity: 1, consumed_at_start: true, required_tags: [ItemTag.DAMAGED] }
       ],
       can_fail: false,
       failure_chance: 0,
@@ -499,6 +526,7 @@ export const tacticalKnifeRestoreMethod: MachineBasedMethod = {
     }
   ],
   
+  // Legacy output configuration
   output_state: 'functional',
   output_quality_range: [70, 85],
   labor_cost_multiplier: 0.7,
@@ -514,6 +542,10 @@ export const tacticalKnifeSharpenMethod: MachineBasedMethod = {
   name: 'Quick Sharpen',
   description: 'Rapidly sharpen dull knives for resale',
   
+  // Output configuration for new inventory system
+  outputTags: [ItemTag.REFURBISHED],
+  qualityRange: [65, 80],
+  
   operations: [
     // Operation 1: Edge Assessment (Hand Tools)
     {
@@ -526,7 +558,7 @@ export const tacticalKnifeSharpenMethod: MachineBasedMethod = {
       },
       baseDurationMinutes: 3,
       material_requirements: [
-        { material_id: 'dull_tactical_knife', quantity: 1, consumed_at_start: true }
+        { material_id: 'tactical_knife', quantity: 1, consumed_at_start: true, required_tags: [ItemTag.SALVAGED] }
       ],
       can_fail: false,
       failure_chance: 0,
@@ -551,6 +583,7 @@ export const tacticalKnifeSharpenMethod: MachineBasedMethod = {
     }
   ],
   
+  // Legacy output configuration
   output_state: 'functional',
   output_quality_range: [60, 75],
   labor_cost_multiplier: 0.4,

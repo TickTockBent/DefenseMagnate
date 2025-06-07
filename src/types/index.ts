@@ -63,5 +63,9 @@ export * from './machineSlot';
 export * from './market';
 export * from './contracts';
 
+// Unified item system types
+export * from './items';
+export * from './inventory';
+
 // Re-export common utilities
 export * from '../utils/formatters';

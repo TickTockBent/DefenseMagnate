@@ -13,9 +13,13 @@ import {
   EquipmentInstance,
   EquipmentStatus,
   TagCategory,
-  JobPriority
+  JobPriority,
+  ItemInstance,
+  ItemTag
 } from '../types';
 import { TIME_SCALE, type GameTime } from '../utils/gameClock';
+import { inventoryManager } from '../utils/inventoryManager';
+import { createItemInstance } from '../utils/itemSystem';
 
 export class MachineWorkspaceManager {
   private workspaces: Map<string, MachineWorkspace> = new Map();
@@ -225,9 +229,25 @@ export class MachineWorkspaceManager {
     
     for (const mat of operation.material_requirements) {
       if (mat.consumed_at_start) {
-        const available = facility.current_storage[mat.material_id] || 0;
-        if (available < mat.quantity * job.quantity) {
-          return false;
+        // Check new inventory system first
+        if (facility.inventory) {
+          let available: number;
+          if (mat.required_tags && mat.required_tags.length > 0) {
+            // Count items with specific tags
+            available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags);
+          } else {
+            // Count all items of this type
+            available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
+          }
+          if (available < mat.quantity * job.quantity) {
+            return false;
+          }
+        } else {
+          // Fall back to legacy storage
+          const available = facility.current_storage[mat.material_id] || 0;
+          if (available < mat.quantity * job.quantity) {
+            return false;
+          }
         }
       }
     }
@@ -242,8 +262,36 @@ export class MachineWorkspaceManager {
     for (const mat of operation.material_requirements) {
       if (mat.consumed_at_start) {
         const needed = mat.quantity * job.quantity;
-        facility.current_storage[mat.material_id] = 
-          (facility.current_storage[mat.material_id] || 0) - needed;
+        
+        // Use new inventory system if available
+        if (facility.inventory) {
+          let itemsToConsume: any[];
+          if (mat.required_tags && mat.required_tags.length > 0) {
+            // Find items with specific tags
+            itemsToConsume = inventoryManager.getBestQualityItemsWithTags(
+              facility.inventory, 
+              mat.material_id, 
+              needed,
+              mat.required_tags
+            );
+          } else {
+            // Find best quality items of any type
+            itemsToConsume = inventoryManager.getBestQualityItems(
+              facility.inventory, 
+              mat.material_id, 
+              needed
+            );
+          }
+          
+          // Remove items from inventory
+          for (const item of itemsToConsume) {
+            inventoryManager.removeItem(facility.inventory, item.id, item.quantity);
+          }
+        } else {
+          // Fall back to legacy storage
+          facility.current_storage[mat.material_id] = 
+            (facility.current_storage[mat.material_id] || 0) - needed;
+        }
         
         // Track consumed materials
         if (!job.consumedMaterials) job.consumedMaterials = new Map();
@@ -441,10 +489,37 @@ export class MachineWorkspaceManager {
       job.state = 'completed';
       job.completedAt = this.currentGameTime.totalGameHours;
       
-      // Add finished product to facility storage
-      const productKey = `${job.productId}_${job.method.output_state}`;
-      facility.current_storage[productKey] = 
-        (facility.current_storage[productKey] || 0) + job.quantity;
+      // Add finished product to storage
+      if (facility.inventory && job.method.outputTags) {
+        // Use new inventory system with tags
+        const [minQuality, maxQuality] = job.method.qualityRange || job.method.output_quality_range || [75, 95];
+        const baseQuality = minQuality + Math.random() * (maxQuality - minQuality);
+        
+        // Apply quality cap if specified
+        const finalQuality = job.method.qualityCap 
+          ? Math.min(baseQuality, job.method.qualityCap)
+          : baseQuality;
+        
+        // Create item instance with output tags
+        const productItem = createItemInstance({
+          baseItemId: job.productId,
+          tags: job.method.outputTags,
+          quality: finalQuality,
+          quantity: job.quantity,
+          metadata: {
+            source: 'manufacturing',
+            methodId: job.method.id,
+            completedAt: this.currentGameTime.totalGameHours
+          }
+        });
+        
+        inventoryManager.addItem(facility.inventory, productItem);
+      } else {
+        // Fall back to legacy storage
+        const productKey = `${job.productId}_${job.method.output_state}`;
+        facility.current_storage[productKey] = 
+          (facility.current_storage[productKey] || 0) + job.quantity;
+      }
       
       workspace.completedJobs.push(job);
       

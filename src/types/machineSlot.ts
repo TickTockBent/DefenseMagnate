@@ -4,6 +4,7 @@
 // import type { ProductionJob } from './productionJob';
 import type { EquipmentInstance } from './equipment';
 import type { TagCategory, JobPriority } from '../constants/enums';
+import type { ItemTag } from './items';
 
 // Represents a single work slot on a machine
 export interface MachineSlot {
@@ -47,6 +48,7 @@ export interface MachineOperation {
     material_id: string;
     quantity: number;
     consumed_at_start: boolean;
+    required_tags?: ItemTag[]; // Items must have these tags to be consumed
   }>;
   
   // Quality and failure
@@ -67,9 +69,12 @@ export interface MachineBasedMethod {
   // Sequential operations (each uses one machine)
   operations: MachineOperation[];
   
-  // Product outcome
+  // Product outcome (ENHANCED)
   output_state: 'pristine' | 'functional' | 'damaged' | 'junk';
   output_quality_range: [number, number];
+  outputTags?: ItemTag[]; // NEW: Tags to apply to produced items
+  qualityRange?: [number, number]; // NEW: Alias for output_quality_range for consistency
+  qualityCap?: number; // NEW: Maximum quality achievable with this method
   
   // Economics
   labor_cost_multiplier: number;

@@ -16,7 +16,10 @@ import {
   MarketState,
   ContractState,
   createGarage,
-  aggregateEquipmentTags
+  aggregateEquipmentTags,
+  FacilityInventory,
+  ItemInstance,
+  ItemTag
 } from '../types';
 import { ProductionScheduler } from '../systems/productionScheduler';
 import { MachineWorkspaceManager } from '../systems/machineWorkspace';
@@ -26,6 +29,9 @@ import { equipmentDatabase, starterEquipmentSets } from '../data/equipment';
 import { productsWithMethods } from '../data/productsWithTags';
 import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
 import { createGameTime, updateGameTime, type GameTime } from '../utils/gameClock';
+import { facilityMigrationManager } from '../utils/facilityMigration';
+import { inventoryManager } from '../utils/inventoryManager';
+import { createItemInstance } from '../utils/itemSystem';
 
 // Add elapsed property to GameTime for compatibility
 interface ExtendedGameTime extends GameTime {
@@ -174,6 +180,13 @@ interface GameState {
   acceptSupplyContract: (contractId: string) => void;
   fulfillContract: (contractId: string, facilityId: string) => void;
   refreshContracts: () => void;
+  
+  // Inventory management actions
+  migrateFacilityInventory: (facilityId: string) => void;
+  addItemToInventory: (facilityId: string, item: ItemInstance) => boolean;
+  removeItemFromInventory: (facilityId: string, itemInstanceId: string, quantity?: number) => boolean;
+  getAvailableItems: (facilityId: string, baseItemId: string) => number;
+  findBestQualityItems: (facilityId: string, baseItemId: string, quantity: number) => ItemInstance[];
 }
 
 // Helper to create initial equipment instances
@@ -256,8 +269,32 @@ export const useGameStore = create<GameState>((set, get) => ({
         // Deliver materials to facility
         const facility = state.facilities.find(f => f.id === order.facilityId);
         if (facility) {
+          // LEGACY: Update old storage system
           const currentAmount = facility.current_storage[order.materialId] || 0;
           facility.current_storage[order.materialId] = currentAmount + order.quantity;
+          
+          // NEW: Update inventory system if present
+          if (facility.inventory) {
+            try {
+              // Create item instance for delivered material
+              const deliveredItem = createItemInstance({
+                baseItemId: order.materialId,
+                tags: [ItemTag.STANDARD], // Default to standard quality for market purchases
+                quality: 80 + Math.random() * 15, // 80-95% quality for market materials
+                quantity: order.quantity,
+                metadata: { 
+                  source: 'market_delivery',
+                  supplierId: order.supplierId,
+                  deliveredAt: newGameTime.totalGameHours
+                }
+              });
+              
+              inventoryManager.addItem(facility.inventory, deliveredItem);
+            } catch (error) {
+              console.warn('Failed to add delivered item to new inventory system:', error);
+              // Fall back to legacy system only
+            }
+          }
         }
         
         return { ...order, status: 'delivered' as const };
@@ -938,6 +975,98 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
       };
     });
+  },
+  
+  // Inventory management action implementations
+  migrateFacilityInventory: (facilityId) => {
+    set(state => {
+      const facility = state.facilities.find(f => f.id === facilityId);
+      if (!facility) {
+        console.error(`Facility not found: ${facilityId}`);
+        return state;
+      }
+      
+      if (facilityMigrationManager.needsMigration(facility)) {
+        const migratedFacility = facilityMigrationManager.migrateFacility(facility);
+        
+        return {
+          ...state,
+          facilities: state.facilities.map(f => 
+            f.id === facilityId ? migratedFacility : f
+          )
+        };
+      }
+      
+      return state;
+    });
+  },
+  
+  addItemToInventory: (facilityId, item) => {
+    const state = get();
+    const facility = state.facilities.find(f => f.id === facilityId);
+    
+    if (!facility || !facility.inventory) {
+      console.error(`Facility or inventory not found: ${facilityId}`);
+      return false;
+    }
+    
+    const success = inventoryManager.addItem(facility.inventory, item);
+    
+    if (success) {
+      set(state => ({
+        facilities: state.facilities.map(f => 
+          f.id === facilityId ? { ...f, inventory: facility.inventory } : f
+        )
+      }));
+    }
+    
+    return success;
+  },
+  
+  removeItemFromInventory: (facilityId, itemInstanceId, quantity) => {
+    const state = get();
+    const facility = state.facilities.find(f => f.id === facilityId);
+    
+    if (!facility || !facility.inventory) {
+      console.error(`Facility or inventory not found: ${facilityId}`);
+      return false;
+    }
+    
+    const success = inventoryManager.removeItem(facility.inventory, itemInstanceId, quantity);
+    
+    if (success) {
+      set(state => ({
+        facilities: state.facilities.map(f => 
+          f.id === facilityId ? { ...f, inventory: facility.inventory } : f
+        )
+      }));
+    }
+    
+    return success;
+  },
+  
+  getAvailableItems: (facilityId, baseItemId) => {
+    const state = get();
+    const facility = state.facilities.find(f => f.id === facilityId);
+    
+    if (!facility || !facility.inventory) {
+      // Fall back to legacy storage
+      return facility?.current_storage[baseItemId] || 0;
+    }
+    
+    return inventoryManager.getAvailableQuantity(facility.inventory, baseItemId);
+  },
+  
+  findBestQualityItems: (facilityId, baseItemId, quantity) => {
+    const state = get();
+    const facility = state.facilities.find(f => f.id === facilityId);
+    
+    if (!facility || !facility.inventory) {
+      console.warn(`Facility or inventory not found: ${facilityId}`);
+      return [];
+    }
+    
+    return inventoryManager.getBestQualityItems(facility.inventory, baseItemId, quantity);
   }
 }));
 
@@ -977,6 +1106,12 @@ const initialMaterials = {
 
 // Sync facility storage with game store materials
 initialFacility.current_storage = { ...initialMaterials };
+
+// Initialize new inventory system with migration from legacy storage
+initialFacility.inventory = facilityMigrationManager.migrateFacility({
+  ...initialFacility,
+  current_storage: initialMaterials
+}).inventory;
 
 // Initialize the machine workspace for the facility
 const machineManager = new MachineWorkspaceManager(equipmentDatabase);
