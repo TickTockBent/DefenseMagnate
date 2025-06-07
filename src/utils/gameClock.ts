@@ -11,7 +11,7 @@ export interface GameTime {
 
 export const TIME_SCALE = {
   REAL_MINUTE_TO_GAME_HOURS: 1,
-  MS_PER_GAME_HOUR: 60 * 1000, // 60 seconds = 1 game hour
+  MS_PER_GAME_HOUR: 60 * 1000, // 60 seconds = 1 game hour (1 real minute = 1 game hour)
 }
 
 export function createGameTime(): GameTime {

@@ -4,47 +4,82 @@
 
 *Defense Magnate* is a single-player, browser-playable management simulation game set in a fractured galactic warzone. The player assumes the role of CEO of an arms manufacturing company, navigating the complex demands of industrial production, political contracts, shifting supply chains, and technological progress. The tone is hard-industrial with a retrofuturistic interface and emergent consequences.
 
-The game will launch as a web application with no backend, using clever encoding for save data and a modular interface for managing different systems. A Steam release may follow using Electron or Tauri.
+The game operates in real-time with a 1 minute = 1 game hour time scale, allowing players to watch their production lines progress naturally while maintaining engaging pacing. The game will launch as a web application with no backend, using clever encoding for save data and a modular interface for managing different systems. A Steam release may follow using Electron or Tauri.
+
+**Current Status**: Manufacturing v1 Complete - Full machine workspace system with facility-wide job queues, multiple products, and real-time notifications is fully implemented and functional.
 
 ---
 
 ## Core Gameplay Features
 
-### 1. **Industrial Management Loop**
+### 1. **Machine Workspace Manufacturing System** ✅ IMPLEMENTED
 
-* Players manage R\&D, manufacturing, and contract fulfillment.
-* Start with basic weapons (e.g., phasers) and scale to building modular capital ships.
-* Use production facilities with customizable efficiency, retooling costs, and outputs.
+The core of Defense Magnate is a realistic manufacturing system where production flows through physical machine slots in a facility workspace.
 
-### 2. **R\&D System**
+**Machine Slot Architecture:**
+* Each machine has **one work slot** that can be occupied or idle
+* **Facility-wide job queue** feeds jobs to any suitable available machine
+* **Single-machine operations** - each manufacturing step uses exactly one machine
+* **Dynamic job assignment** - jobs automatically flow to the best available machine
+* **Pull-based workflow** - machines pull work from the facility queue when ready
+
+**Equipment & Tag System:**
+* Equipment provides specific **capability tags** (SURFACE, TURNING, MILLING, BASIC_MANIPULATION, etc.)
+* Operations require **specific tag combinations** with minimum thresholds
+* **Tag matching** determines which machines can perform which operations
+* **Equipment efficiency** affects operation duration and success rates
+
+**Multi-Product Manufacturing:**
+* **Basic Sidearm**: 3 methods (Forge New, Restore Damaged, Cobble Together)
+* **Tactical Knife**: 3 methods (Forge New, Restore Damaged, Quick Sharpen)
+* **6 total manufacturing paths** with different complexity (2-6 operations, 11-135 minutes)
+* **Diverse equipment usage** - different methods stress different machine types
+
+**Real-Time Production Flow:**
+* **Sequential operations** - jobs flow through multiple machines automatically
+* **Real-time job queue** with priority and rush order support
+* **Material consumption** at operation start with realistic inventory tracking
+* **Job completion notifications** with auto-dismiss and manual close options
+
+**Visual Workshop Interface:**
+* **Machine grid layout** showing all equipment with live status
+* **Thematic activity spinners** (⚒ workbench, ◉ lathe, ⟲ mill, 🔧 hand tools)
+* **Product dropdown selection** with expandable method details
+* **Scrollable job queue** with priority indicators and operation status
+
+### 2. **R\&D System** 🚧 PLANNED
 
 * Allocate points or resources to tech trees (weapons, sensors, hulls, power systems).
 * Progress unlocks new schematics and production options.
 * Research speed and cost are influenced by facility investment and tech alignment.
+* **Study & Reverse Engineer**: Examine salvaged components to unlock new technologies
 
-### 3. **Dynamic Contract System**
+### 3. **Dynamic Contract System** 🚧 PLANNED
 
 * Compete for military and corporate contracts with faction-specific needs.
 * Contracts include deadlines, budget caps, and custom loadouts.
 * Fulfilling a contract may have ripple effects (e.g., attacking your own suppliers).
+* **Customer Relations**: Build reputation with different galactic factions
 
-### 4. **Supply Chain Mechanics**
+### 4. **Supply Chain Mechanics** 🚧 NEXT PRIORITY
 
-* Materials like space-titanium, quantum plastics, and antimatter sourced from galactic nodes.
-* Supply chains can be disrupted by war, piracy, or your own deliveries.
+* Materials like steel, plastics, electronics, and exotic materials sourced from suppliers.
+* Supply chains can be disrupted by war, piracy, or market fluctuations.
 * Players may scout new suppliers or develop substitute materials through R\&D.
+* **Material Quality**: Different grades affect final product quality and failure rates
 
-### 5. **Starmap Incident System**
+### 5. **Starmap Incident System** 🚧 PLANNED
 
 * Right panel features a starmap showing:
-
   * Conflicts (⚔️), pirate activity (☠️), disruptions (⚠️), and scouting ops (👁️)
 * Strategic decisions emerge from interpreting and reacting to these map events.
+* **Discovery & Salvage**: Auction system for salvage lots and component examination
 
-### 6. **Save System & Portability**
+### 6. **Save System & Portability** ✅ IMPLEMENTED
 
-* Game state saved to browser localStorage
+* Game state saved to browser localStorage with real-time autosave
 * Manual export/import available via compressed string code ("Command Codes")
+* No backend dependencies - fully client-side game architecture
 * Supports offline play and infinite scalability
 
 ### 7. **Optional Features for Expansion**

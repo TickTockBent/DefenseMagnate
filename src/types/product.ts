@@ -1,5 +1,7 @@
 // Product type definitions
 
+import type { ManufacturingMethod, ProductState } from './manufacturing';
+
 // Temporarily inline shared types to eliminate import issues
 type FacilityTrait = 
   | 'clean_room'
@@ -8,6 +10,7 @@ type FacilityTrait =
   | 'hazmat_certified'
   | 'automated_assembly'
   | 'quality_control'
+  | 'basic_tools'
 
 type ItemSize = 'tiny' | 'small' | 'medium' | 'large' | 'huge'
 
@@ -138,6 +141,18 @@ export interface Product {
   variant_products?: string[]; // Product IDs
   modular_components?: string[];
   scaling_options?: string[]; // Product IDs for different sizes
+
+  // Manufacturing Methods (new multi-step system)
+  manufacturing_methods?: ManufacturingMethod[]; // Multiple ways to make this product
+  default_method_id?: string; // Which method to use by default
+  
+  // Product state variants
+  state_variants?: Record<ProductState, {
+    name_suffix: string; // e.g., "Damaged" for damaged state
+    quality_modifier: number; // Multiplier for base quality
+    price_modifier: number; // Multiplier for base price
+    description_override?: string;
+  }>;
 }
 
 // Helper function to calculate profit margin

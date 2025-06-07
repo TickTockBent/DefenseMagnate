@@ -1,17 +1,10 @@
 // Facility type definitions
 
+import { TagCategory } from '../constants/enums';
 import type { ProductionLine } from './productionLine';
-
-// Inline shared types to avoid import issues
-export type FacilityTrait = 
-  | 'clean_room'
-  | 'heavy_lifting'
-  | 'precision_machining'
-  | 'hazmat_certified'
-  | 'automated_assembly'
-  | 'quality_control'
-
-export type ItemSize = 'tiny' | 'small' | 'medium' | 'large' | 'huge'
+import type { EquipmentInstance } from './equipment';
+import type { ProductionQueue } from './productionJob';
+import type { FacilityTrait, ItemSize } from './shared';
 
 export type FacilityType = 
   | 'garage_workshop'
@@ -55,10 +48,11 @@ export interface Facility {
   description: string
   
   // Physical Constraints
-  production_lines: number
+  production_lines: number // Legacy - will be deprecated
   max_item_size: ItemSize
   storage_capacity: number
   floor_space: number
+  used_floor_space: number // Space occupied by equipment
   
   // Economic Data
   purchase_cost: number
@@ -73,8 +67,15 @@ export interface Facility {
   // Upgrade System
   upgrades: FacilityUpgrade[]
   
-  // Operational State
-  active_production: ProductionLine[]
+  // Equipment System
+  equipment: EquipmentInstance[]
+  equipment_capacity: Map<TagCategory, number> // Aggregated equipment capabilities
+  
+  // Production Management
+  production_queue?: ProductionQueue
+  active_production: ProductionLine[] // Legacy - to be migrated
+  
+  // Storage
   current_storage: Record<string, number> // Material/component -> amount
   pending_upgrades: FacilityUpgrade[]
   
@@ -82,6 +83,10 @@ export interface Facility {
   condition: FacilityCondition
   utilization_rate: number
   last_maintenance: number // Turn number
+  
+  // Workers (future feature)
+  assigned_workers?: number
+  max_workers?: number
 }
 
 // Factory function to create a basic garage
@@ -98,6 +103,7 @@ export function createGarage(name: string): Facility {
     max_item_size: 'small',
     storage_capacity: 100,
     floor_space: 50,
+    used_floor_space: 0,
     
     purchase_cost: 0, // Player starts with this
     operating_cost_per_day: 10,
@@ -111,6 +117,8 @@ export function createGarage(name: string): Facility {
     },
     
     upgrades: [],
+    equipment: [], // Will be populated by game store
+    equipment_capacity: new Map<TagCategory, number>(), // Will be calculated from equipment
     
     active_production: [{
       id: 'line-1',
@@ -120,7 +128,22 @@ export function createGarage(name: string): Facility {
       materials_loaded: false,
       labor_assigned: 0,
     }],
-    current_storage: {},
+    current_storage: {
+      // Starter materials for testing - enough for 2-3 jobs each
+      
+      // For Forge method (steel + plastic) - 3 jobs worth
+      steel: 5,
+      plastic: 2,
+      
+      // For Restore method (damaged weapons + spares) - 3 jobs worth  
+      damaged_basic_sidearm: 3,
+      low_tech_spares: 20, // Used by both restore and cobble methods
+      
+      // Additional useful materials
+      aluminum: 2,
+      basic_electronics: 3,
+      machined_parts: 5
+    },
     pending_upgrades: [],
     
     condition: 'operational',

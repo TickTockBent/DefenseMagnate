@@ -1,5 +1,5 @@
 // Material definitions
-import type { Material } from '../types/material';
+import { Material } from '../types';
 
 export const materials: Record<string, Material> = {
   // Basic materials
@@ -81,6 +81,32 @@ export const materials: Record<string, Material> = {
     unit: 'units',
     base_cost: 100,
     availability: 'common'
+  },
+  
+  // Manufacturing-specific materials
+  damaged_basic_sidearm: {
+    id: 'damaged_basic_sidearm',
+    name: 'Damaged Basic Sidearm',
+    description: 'A broken basic sidearm that can be restored with proper repair work',
+    unit: 'units',
+    base_cost: 30,
+    availability: 'uncommon'
+  },
+  low_tech_spares: {
+    id: 'low_tech_spares',
+    name: 'Low Tech Spares',
+    description: 'Collection of basic spare parts, screws, springs, and simple components',
+    unit: 'units',
+    base_cost: 8,
+    availability: 'common'
+  },
+  machined_parts: {
+    id: 'machined_parts',
+    name: 'Machined Parts',
+    description: 'Precision-manufactured components for high-quality assembly',
+    unit: 'units',
+    base_cost: 45,
+    availability: 'uncommon'
   }
 };
 
