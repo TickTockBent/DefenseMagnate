@@ -262,9 +262,20 @@ export const useGameStore = create<GameState>((set, get) => ({
         return f;
       });
       
+      // Reinitialize machine workspace for the updated facility if it's currently selected
+      let updatedWorkspace = state.machineWorkspace;
+      if (state.selectedFacilityId === facilityId && state.machineWorkspace) {
+        const updatedFacility = updatedFacilities.find(f => f.id === facilityId);
+        if (updatedFacility) {
+          state.machineWorkspaceManager.setFacility(updatedFacility);
+          updatedWorkspace = state.machineWorkspaceManager.initializeWorkspace(updatedFacility);
+        }
+      }
+      
       return {
         facilities: updatedFacilities,
-        credits: state.credits - equipment.purchaseCost - equipment.installationCost
+        credits: state.credits - equipment.purchaseCost - equipment.installationCost,
+        machineWorkspace: updatedWorkspace
       };
     });
   },
@@ -300,9 +311,20 @@ export const useGameStore = create<GameState>((set, get) => ({
         return f;
       });
       
+      // Reinitialize machine workspace for the updated facility if it's currently selected
+      let updatedWorkspace = state.machineWorkspace;
+      if (state.selectedFacilityId === facilityId && state.machineWorkspace) {
+        const updatedFacility = updatedFacilities.find(f => f.id === facilityId);
+        if (updatedFacility) {
+          state.machineWorkspaceManager.setFacility(updatedFacility);
+          updatedWorkspace = state.machineWorkspaceManager.initializeWorkspace(updatedFacility);
+        }
+      }
+      
       return {
         facilities: updatedFacilities,
-        credits: state.credits + saleValue
+        credits: state.credits + saleValue,
+        machineWorkspace: updatedWorkspace
       };
     });
   },
