@@ -172,7 +172,6 @@ Three basic sidearm manufacturing methods available:
 - **[Manufacturing System](docs/product-manufacture.md)**: Detailed manufacturing system documentation
 - **[Equipment System](docs/facility-object.md)**: Equipment and facility mechanics
 - **[ASCII Style Guide](docs/ascii-style-guide.md)**: UI design patterns and conventions
-- **[Development Guide](docs/Agent%20Workflow%20and%20Style%20Guide.md)**: Development patterns and workflows
 
 ## 🎯 Current Status
 
