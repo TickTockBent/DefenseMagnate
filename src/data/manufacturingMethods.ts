@@ -129,7 +129,6 @@ export const basicSidearmForgeMethod: MachineBasedMethod = {
   // Legacy output configuration
   output_state: 'pristine',
   output_quality_range: [80, 95],
-  outputTags: [ItemTag.FORGED], // NEW: Produces forged quality items
   labor_cost_multiplier: 1.5,
   complexity_rating: 5,
   profit_margin_modifier: 1.3,

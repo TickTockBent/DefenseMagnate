@@ -3,14 +3,11 @@
 import { create } from 'zustand';
 import { 
   Facility, 
-  ProductionLine,
+  // LEGACY: ProductionLine, ProductionJob, ProductionQueue, ManufacturingMethod (superseded by machine workspace)
   Equipment, 
   EquipmentInstance,
   EquipmentStatus,
-  ProductionJob, 
-  ProductionQueue,
   JobPriority,
-  ManufacturingMethod,
   MachineWorkspace,
   MachineBasedMethod,
   MarketState,
@@ -21,12 +18,13 @@ import {
   ItemInstance,
   ItemTag
 } from '../types';
-import { ProductionScheduler } from '../systems/productionScheduler';
+// LEGACY: ProductionScheduler superseded by MachineWorkspaceManager
+// import { ProductionScheduler } from '../systems/productionScheduler';
 import { MachineWorkspaceManager } from '../systems/machineWorkspace';
 import { MarketGenerator } from '../systems/marketGenerator';
 import { ContractGenerator } from '../systems/contractGenerator';
 import { equipmentDatabase, starterEquipmentSets } from '../data/equipment';
-import { productsWithMethods } from '../data/productsWithTags';
+// LEGACY: import { productsWithMethods } from '../data/productsWithTags';
 import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
 import { createGameTime, updateGameTime, type GameTime } from '../utils/gameClock';
 import { facilityMigrationManager } from '../utils/facilityMigration';
@@ -39,7 +37,8 @@ interface ExtendedGameTime extends GameTime {
   deltaTime: number;
 }
 
-// Existing interfaces remain the same
+// LEGACY: Contract interface (superseded by contract system in types/contracts.ts)
+/*
 interface Contract {
   id: string;
   faction: string;
@@ -49,6 +48,7 @@ interface Contract {
   status: 'available' | 'active' | 'completed' | 'failed';
   risk: 'low' | 'medium' | 'high';
 }
+*/
 
 interface Research {
   id: string;
@@ -88,8 +88,8 @@ interface GameState {
   // Equipment database
   equipmentDatabase: Map<string, Equipment>;
   
-  // Production scheduling (legacy - to be removed)
-  productionScheduler: ProductionScheduler;
+  // LEGACY: Production scheduling (superseded by MachineWorkspaceManager)
+  // productionScheduler: ProductionScheduler;
   
   // New machine workspace system
   machineWorkspaceManager: MachineWorkspaceManager;
@@ -99,12 +99,12 @@ interface GameState {
   marketGenerator: MarketGenerator;
   contractGenerator: ContractGenerator;
   
-  // Legacy production (to be migrated)
-  productionLines: ProductionLine[];
-  completedProducts: Record<string, number>; // Product inventory
+  // LEGACY: Production (superseded by machine workspace and inventory systems)
+  // productionLines: ProductionLine[];
+  // completedProducts: Record<string, number>; // Product inventory
   
   // LEGACY: Contracts (old system - being replaced by contractState)
-  contracts: Contract[]; // TODO: Remove after migration complete
+  // contracts: Contract[]; // TODO: Remove after migration complete
   
   // Market and Contracts System
   marketState: MarketState;
@@ -141,7 +141,8 @@ interface GameState {
   sellEquipment: (facilityId: string, equipmentInstanceId: string) => void;
   maintainEquipment: (facilityId: string, equipmentInstanceId: string) => void;
   
-  // Production actions (new system)
+  // LEGACY: Production actions (superseded by machine workspace system)
+  /*
   addProductionJob: (
     facilityId: string, 
     productId: string, 
@@ -152,6 +153,7 @@ interface GameState {
   ) => void;
   cancelProductionJob: (facilityId: string, jobId: string) => void;
   updateProductionPriority: (facilityId: string, jobId: string, priority: JobPriority) => void;
+  */
   
   // Machine workspace actions
   startMachineJob: (
@@ -218,14 +220,14 @@ export const useGameStore = create<GameState>((set, get) => ({
   
   facilities: [],
   equipmentDatabase: equipmentDatabase,
-  productionScheduler: new ProductionScheduler(equipmentDatabase),
+  // LEGACY: productionScheduler: new ProductionScheduler(equipmentDatabase),
   machineWorkspaceManager: new MachineWorkspaceManager(equipmentDatabase),
   marketGenerator: new MarketGenerator(),
   contractGenerator: new ContractGenerator(),
   
-  productionLines: [],
-  completedProducts: {},
-  contracts: [],
+  // LEGACY: productionLines: [],
+  // LEGACY: completedProducts: {},
+  // LEGACY: contracts: [],
   
   // Market and contracts system initialization
   marketState: {
@@ -535,7 +537,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     }));
   },
   
-  // Production management (new system)
+  // LEGACY: Production management (superseded by machine workspace system)
+  /*
   addProductionJob: (facilityId, productId, methodId, quantity, priority = JobPriority.NORMAL, contractId) => {
     const state = get();
     const facility = state.facilities.find(f => f.id === facilityId);
@@ -575,7 +578,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       )
     }));
   },
+  */
   
+  // LEGACY: More production management functions (superseded by machine workspace)
+  /*
   cancelProductionJob: (facilityId, jobId) => {
     // Implementation here
   },
@@ -583,6 +589,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   updateProductionPriority: (facilityId, jobId, priority) => {
     // Implementation here
   },
+  */
   
   // New machine workspace system
   startMachineJob: (facilityId, productId, methodId, quantity = 1, rushOrder = false) => {
@@ -641,7 +648,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }
     
-    // Legacy production system (to be removed)
+    // LEGACY: Production system (superseded by machine workspace system)
+    /*
     set(state => {
       const updatedFacilities = state.facilities.map(facility => {
         if (!facility.production_queue) return facility;
@@ -681,6 +689,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       
       return { facilities: updatedFacilities };
     });
+    */
   },
   
   // Notification management
@@ -749,7 +758,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       
       let availableQuantity = 0;
-      let qualityGrade = 'standard';
+      let qualityGrade: 'junk' | 'functional' | 'standard' | 'pristine' = 'standard';
       let itemsToRemove: ItemInstance[] = [];
       
       if (facility.inventory) {
@@ -776,7 +785,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                       avgQuality >= 50 ? 'standard' : 'junk';
       } else {
         // Fall back to legacy storage system
-        const qualityLevels = ['pristine', 'standard', 'functional', 'junk'];
+        const qualityLevels: ('pristine' | 'functional' | 'standard' | 'junk')[] = ['pristine', 'functional', 'standard', 'junk'];
         let sourceStorageKey = '';
         
         for (const quality of qualityLevels) {

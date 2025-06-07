@@ -292,7 +292,7 @@ function ProductListingInterface({ facility }: ProductListingInterfaceProps) {
   const availableProducts = facility.inventory ? 
     // Use new inventory system
     Array.from(facility.inventory.groups.values())
-      .flatMap(group => group.slots)
+      .flatMap((group: any) => group.slots)
       .filter(slot => ['basic_sidearm', 'tactical_knife'].includes(slot.baseItemId))
       .filter(slot => slot.available > 0)
       .map(slot => {

@@ -118,7 +118,7 @@ export function ResourcePanel() {
                 Inventory Error: groups is not a Map
                 <div className="text-xs mt-1 text-gray-500">
                   Type: {typeof selectedFacility.inventory.groups}, 
-                  Value: {selectedFacility.inventory.groups?.toString() || 'undefined'}
+                  Value: {String(selectedFacility.inventory.groups) || 'undefined'}
                 </div>
               </div>
             )}

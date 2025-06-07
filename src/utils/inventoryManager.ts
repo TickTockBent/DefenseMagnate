@@ -9,7 +9,8 @@ import {
   ItemCategory,
   ItemFilter,
   InventorySearchResult,
-  InventoryOperation
+  InventoryOperation,
+  ItemTag
 } from '../types';
 import { baseItems, getBaseItem } from '../data/baseItems';
 import { createItemInstance, calculateMarketValue, combineCompatibleItems } from './itemSystem';
