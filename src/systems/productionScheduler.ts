@@ -1,4 +1,7 @@
-// Production Scheduler System - Manages job queues and equipment allocation
+// LEGACY SYSTEM - Production Scheduler System - TO BE REMOVED AFTER V1 TESTING
+// This system is replaced by the new Machine Workspace system (machineWorkspace.ts)
+// It uses old ManufacturingStep.required_tags structure and legacy job interfaces
+// Kept temporarily to avoid breaking existing imports, but should be removed after migration testing
 
 import { 
   ProductionJob, 
@@ -41,7 +44,7 @@ export class ProductionScheduler {
     const availableCapacity = this.calculateAvailableCapacity(facility);
     
     // Check if we can satisfy all requirements with available capacity
-    for (const req of step.required_tags) {
+    for (const req of step.required_tags || []) {
       const available = availableCapacity.get(req.category) || 0;
       
       if (typeof req.minimum === 'boolean') {
@@ -61,7 +64,7 @@ export class ProductionScheduler {
     const reservedEquipment: EquipmentInstance[] = [];
     const reservedCapacity = new Map<string, number>(); // Equipment ID -> reserved capacity amount
     
-    for (const req of step.required_tags) {
+    for (const req of step.required_tags || []) {
       // Find the best equipment to provide this requirement
       const suitableEquipment = facility.equipment
         .filter(eq => eq.status === EquipmentStatus.AVAILABLE || (eq.status === EquipmentStatus.RESERVED && eq.reservedBy === jobId))
@@ -339,7 +342,7 @@ export class ProductionScheduler {
     let worstMultiplier = 1.0;
     
     // Check each required tag
-    for (const req of step.required_tags) {
+    for (const req of step.required_tags || []) {
       if (typeof req.minimum === 'number') {
         const available = facility.equipment_capacity.get(req.category) || 0;
         const ratio = available / (req.optimal || req.minimum);
@@ -596,7 +599,7 @@ export class ProductionScheduler {
     stepProgress.consumedCapacity = new Map();
     
     // For each required tag, find and allocate equipment
-    for (const req of step.required_tags) {
+    for (const req of step.required_tags || []) {
       if (typeof req.minimum === 'number') {
         const consumeAmount = req.consumes || req.minimum;
         // Find equipment that provides this tag
@@ -681,8 +684,8 @@ export class ProductionScheduler {
         const stepProgress = job.stepProgress[job.currentStepIndex];
         if (stepProgress.state === StepState.IN_PROGRESS && stepProgress.consumedCapacity) {
           for (const [category, consumed] of stepProgress.consumedCapacity) {
-            const current = available.get(category) || 0;
-            available.set(category, current - consumed);
+            const current = available.get(category as any) || 0;
+            available.set(category as any, current - consumed);
           }
         }
       }
@@ -704,7 +707,7 @@ export class ProductionScheduler {
           const step = job.steps[job.currentStepIndex];
           
           // Check which requirements are blocking
-          for (const req of step.required_tags) {
+          for (const req of step.required_tags || []) {
             const available = facility.equipment_capacity.get(req.category) || 0;
             if (typeof req.minimum === 'number' && available < req.minimum) {
               const waitTime = queue.bottleneckTracking.get(req.category) || 0;
@@ -726,7 +729,7 @@ export class ProductionScheduler {
       else if (waitTime > 50) severity = 'high';
       else if (waitTime > 20) severity = 'medium';
       
-      report.push({ category, waitTime, severity });
+      report.push({ category: category as any, waitTime, severity });
     }
     
     return report.sort((a, b) => b.waitTime - a.waitTime);

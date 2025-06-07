@@ -1,6 +1,7 @@
 // Machine Slot System Types
 
-import type { ProductionJob } from './productionJob';
+// LEGACY import - commented out during migration
+// import type { ProductionJob } from './productionJob';
 import type { EquipmentInstance } from './equipment';
 import type { TagCategory, JobPriority } from '../constants/enums';
 
@@ -8,7 +9,7 @@ import type { TagCategory, JobPriority } from '../constants/enums';
 export interface MachineSlot {
   id: string;
   machineId: string; // Reference to EquipmentInstance
-  currentJob?: ProductionJob; // Job currently being processed
+  currentJob?: MachineSlotJob; // Job currently being processed
   maxCapacity: number; // Usually 1 for basic machines
   
   // Current work progress
@@ -54,7 +55,7 @@ export interface MachineOperation {
   failure_result?: 'scrap' | 'rework' | 'downgrade';
   
   // Worker requirements
-  labor_skill?: 'unskilled' | 'skilled_technician' | 'skilled_machinist' | 'specialist';
+  labor_skill?: 'unskilled' | 'skilled_technician' | 'skilled_machinist' | 'specialist' | 'quality_inspector';
 }
 
 // Manufacturing method with machine operations
@@ -81,11 +82,39 @@ export interface MachineBasedMethod {
 }
 
 
-// Enhanced production job for machine slots
-export interface MachineSlotJob extends ProductionJob {
+// Enhanced production job for machine slots (CURRENT SYSTEM)
+export interface MachineSlotJob {
+  id: string;
+  facilityId: string;
+  
+  // Product information
+  productId: string;
+  method: MachineBasedMethod; // Uses new machine-based methods
+  quantity: number;
+  
+  // Job metadata
   priority: JobPriority;
   rushOrder: boolean; // Can jump queues
+  createdAt: number; // Game time
+  startedAt?: number;
+  completedAt?: number;
+  
+  // Machine workspace specific
+  state: 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
   currentMachineId?: string; // Which machine is processing this
   currentOperationIndex: number; // Which operation we're on
   completedOperations: string[]; // IDs of completed operations
+  
+  // Material tracking (for legacy compatibility)
+  consumedMaterials?: Map<string, number>;
+  finalQuality?: number;
 }
+
+// LEGACY - Comment out after migration
+// export interface MachineSlotJob extends ProductionJob {
+//   priority: JobPriority;
+//   rushOrder: boolean; // Can jump queues
+//   currentMachineId?: string; // Which machine is processing this
+//   currentOperationIndex: number; // Which operation we're on
+//   completedOperations: string[]; // IDs of completed operations
+// }

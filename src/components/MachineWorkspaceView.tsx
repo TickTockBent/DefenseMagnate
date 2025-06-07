@@ -1,12 +1,12 @@
 // Machine Workspace View - Shows machines with job slots
 
 import { useGameStore } from '../state/gameStoreWithEquipment';
-import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility } from '../types';
+import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility, MachineBasedMethod } from '../types';
 import { Equipment, EquipmentInstance } from '../types';
 import { formatGameTime } from '../utils/gameClock';
 import { useState, useEffect } from 'react';
 import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
-import { JobState } from '../constants/enums';
+// LEGACY: import { JobState } from '../constants/enums'; // No longer needed with new machine workspace system
 
 // Helper function to format product names for display
 function formatProductName(productId: string): string {
@@ -156,7 +156,7 @@ interface JobFlowDisplayProps {
 
 function JobFlowDisplay({ jobs }: JobFlowDisplayProps) {
   // Show up to 3 active jobs
-  const activeJobs = jobs.filter(j => j.state === 'IN_PROGRESS').slice(0, 3);
+  const activeJobs = jobs.filter(j => j.state === 'in_progress').slice(0, 3);
   
   return (
     <div className="border border-gray-600 bg-gray-900 p-3 mb-4">
@@ -505,7 +505,7 @@ export function MachineWorkspaceView() {
       <ProductionInterface facility={facility} />
       
       {/* Job flow visualization */}
-      <JobFlowDisplay jobs={allJobs.filter(j => j.state === JobState.IN_PROGRESS)} />
+      <JobFlowDisplay jobs={allJobs.filter(j => j.state === 'in_progress')} />
       
       {/* Summary stats */}
       <div className="mt-4 pt-4 border-t border-gray-700 text-xs text-gray-500">

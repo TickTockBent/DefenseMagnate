@@ -1,4 +1,6 @@
-// Production Job Queue System Types
+// LEGACY TYPES - Production Job Queue System - TO BE REMOVED AFTER V1 TESTING
+// These types are replaced by MachineSlotJob and MachineWorkspace system
+// Kept temporarily to avoid breaking existing imports
 
 import { JobState, StepState, JobPriority } from '../constants/enums';
 import type { TagRequirement } from './equipment';
@@ -191,7 +193,12 @@ export function canStartNextStep(
       jobId: job.id,
       stepIndex: -1,
       canStart: false,
-      blockingReasons: ['No waiting steps']
+      blockingReasons: ['No waiting steps'],
+      requiredResources: {
+        equipment: [],
+        workers: [],
+        materials: new Map()
+      }
     };
   }
   
@@ -204,7 +211,7 @@ export function canStartNextStep(
   };
   
   // Check equipment requirements
-  for (const req of step.required_tags) {
+  for (const req of step.required_tags || []) {
     const available = availableEquipment.get(req.category as any) || 0;
     if (typeof req.minimum === 'number' && available < req.minimum * 0.2) {
       blockingReasons.push(`Insufficient ${req.category}: ${available} < ${req.minimum * 0.2}`);

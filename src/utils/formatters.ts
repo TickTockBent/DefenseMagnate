@@ -49,7 +49,9 @@ export function getTagCategoryName(category: TagCategory): string {
     case TagCategory.CHEMICAL_PROCESSING: return 'Chemical Processing';
     case TagCategory.CRYSTALLINE_GROWTH: return 'Crystalline Growth';
     case TagCategory.NANO_FABRICATION: return 'Nano Fabrication';
-    default: return category.toString();
+    case TagCategory.OPTICS_HANDLING: return 'Optics Handling';
+    case TagCategory.VIBRATION_ISOLATION: return 'Vibration Isolation';
+    default: return String(category);
   }
 }
 

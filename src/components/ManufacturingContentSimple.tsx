@@ -1,3 +1,6 @@
+// LEGACY COMPONENT - Commented out during v1 migration
+// Uses old materials system that doesn't exist in new store
+/*
 // Simplified Manufacturing Content to test the new equipment system
 
 import { useGameStore } from '../state/gameStoreWithEquipment';
@@ -6,7 +9,7 @@ export function ManufacturingContentSimple() {
   const { 
     selectedFacilityId, 
     facilities,
-    materials,
+    materials, // LEGACY: This property no longer exists
     credits,
     equipmentDatabase
   } = useGameStore();
@@ -75,6 +78,20 @@ export function ManufacturingContentSimple() {
           • Each manufacturing step requires specific equipment<br/>
           • No more producing 50 sidearms in a garage without proper tools!
         </div>
+      </div>
+    </div>
+  );
+}
+*/
+
+// LEGACY: Stub export to prevent import errors during migration
+export function ManufacturingContentSimple() {
+  return (
+    <div className="font-mono text-teal-400 p-4">
+      <div className="text-yellow-400">⚠ LEGACY COMPONENT DISABLED</div>
+      <div className="text-gray-400 text-sm">
+        This component uses the old materials system and has been disabled during v1 migration.
+        Use the Manufacturing tab with machine workspace system instead.
       </div>
     </div>
   );

@@ -66,7 +66,11 @@ export enum TagCategory {
   COMPOSITE_LAYUP = 'composite_layup',
   CHEMICAL_PROCESSING = 'chemical_processing',
   CRYSTALLINE_GROWTH = 'crystalline_growth',
-  NANO_FABRICATION = 'nano_fabrication'
+  NANO_FABRICATION = 'nano_fabrication',
+  
+  // Specialized Handling
+  OPTICS_HANDLING = 'optics_handling',
+  VIBRATION_ISOLATION = 'vibration_isolation'
 }
 
 // Production Job States

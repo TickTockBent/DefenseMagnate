@@ -5,8 +5,8 @@ import {
   Facility,
   createGarage,
   ProductionLine,
-  ManufacturingMethod, 
-  ProductionStepInstance
+  ManufacturingMethod 
+  // LEGACY: ProductionStepInstance no longer exists in new machine workspace system
 } from '../types';
 import { getProductData, canAffordMaterials } from '../data/productHelpers';
 import { isProductionComplete } from '../utils/timeSystem';
@@ -112,15 +112,16 @@ function canAffordMethodMaterials(method: ManufacturingMethod, quantity: number,
 }
 
 // Helper function to create step instances for a production line
-function createStepInstances(method: ManufacturingMethod): ProductionStepInstance[] {
-  return method.steps.map(step => ({
-    step_id: step.id,
-    status: 'pending',
-    materials_consumed: false,
-    labor_assigned: false,
-    failure_rolled: false
-  }));
-}
+// LEGACY FUNCTION - Commented out during v1 migration
+// function createStepInstances(method: ManufacturingMethod): ProductionStepInstance[] {
+//   return method.steps.map(step => ({
+//     step_id: step.id,
+//     status: 'pending',
+//     materials_consumed: false,
+//     labor_assigned: false,
+//     failure_rolled: false
+//   }));
+// }
 
 export const useGameStore = create<GameState>()((set) => {
   console.log('D. Store initializer called')
@@ -337,7 +338,7 @@ export const useGameStore = create<GameState>()((set) => {
       // Multi-step specific fields
       manufacturing_method: method,
       current_step_index: 0,
-      step_instances: createStepInstances(method),
+      step_instances: [], // LEGACY: createStepInstances(method) - disabled during migration
       input_product_state: method.input_state,
       expected_output_state: method.output_state,
       expected_quality_range: method.output_quality_range,

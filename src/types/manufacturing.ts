@@ -1,6 +1,9 @@
 // Manufacturing system type definitions
 
 import { ProductState, LaborSkill } from '../constants/enums';
+
+// Re-export these for barrel export
+export type { ProductState, LaborSkill } from '../constants/enums';
 import type { TagRequirement } from './equipment';
 
 // Material requirement for a manufacturing step

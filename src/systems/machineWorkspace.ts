@@ -116,20 +116,13 @@ export class MachineWorkspaceManager {
       quantity,
       priority,
       rushOrder,
-      state: 'QUEUED',
+      state: 'queued',
       createdAt: Date.now(),
       currentOperationIndex: 0,
       completedOperations: [],
       
-      // Legacy fields (will clean up later)
-      steps: [],
-      currentStepIndex: 0,
-      stepProgress: [],
-      reservedMaterials: new Map(),
-      consumedMaterials: new Map(),
-      laborCost: 0,
-      materialCost: 0,
-      equipmentCost: 0
+      // Initialize material tracking
+      consumedMaterials: new Map()
     };
     
     // Add to facility queue and sort by priority
@@ -186,6 +179,7 @@ export class MachineWorkspaceManager {
           (facility.current_storage[mat.material_id] || 0) - needed;
         
         // Track consumed materials
+        if (!job.consumedMaterials) job.consumedMaterials = new Map();
         const consumed = job.consumedMaterials.get(mat.material_id) || 0;
         job.consumedMaterials.set(mat.material_id, consumed + needed);
       }
@@ -326,7 +320,7 @@ export class MachineWorkspaceManager {
   private startJobOnMachine(job: MachineSlotJob, machine: MachineSlot, facility: Facility): void {
     machine.currentJob = job;
     job.currentMachineId = machine.machineId;
-    job.state = 'IN_PROGRESS';
+    job.state = 'in_progress';
     
     const durationInGameHours = this.gameMinutesToHours(this.calculateOperationDuration(job, machine, facility));
     machine.currentProgress = {
@@ -355,7 +349,7 @@ export class MachineWorkspaceManager {
       console.log(`Operation failed for job ${job.id}: ${operation.name}`);
       // Handle failure based on type
       if (operation.failure_result === 'scrap') {
-        job.state = 'FAILED';
+        job.state = 'failed';
         workspace.completedJobs.push(job);
       } else if (operation.failure_result === 'downgrade') {
         job.finalQuality = (job.finalQuality || 85) * 0.8;
@@ -377,7 +371,7 @@ export class MachineWorkspaceManager {
     // Check if job is complete or needs next operation
     if (job.currentOperationIndex >= job.method.operations.length) {
       // Job complete!
-      job.state = 'COMPLETED';
+      job.state = 'completed';
       job.completedAt = this.currentGameTime.totalGameHours;
       
       // Add finished product to facility storage
@@ -395,7 +389,7 @@ export class MachineWorkspaceManager {
       console.log(`Job ${job.id} completed!`);
     } else {
       // Job needs next operation - return to facility queue
-      job.state = 'QUEUED';
+      job.state = 'queued';
       this.addJobToQueue(workspace, job);
       console.log(`Job ${job.id} returned to queue for next operation: ${job.method.operations[job.currentOperationIndex]?.name}`);
     }
@@ -414,7 +408,7 @@ export class MachineWorkspaceManager {
   }
   
   // Get workspace for facility
-  getWorkspace(facilityId: string): MachineWorkspace | null {
-    return this.workspaces.get(facilityId) || null;
+  getWorkspace(facilityId: string): MachineWorkspace | undefined {
+    return this.workspaces.get(facilityId);
   }
 }
