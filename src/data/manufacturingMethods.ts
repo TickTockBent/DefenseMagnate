@@ -439,9 +439,9 @@ export const basicSidearmRestoreComponentMethod: MachineBasedMethod = {
 
 // NEW: Disassembly Methods for Basic Sidearm
 
-// Disassemble Pristine/Good Quality Sidearm
+// Disassemble Pristine/Good Quality Sidearm 
 export const basicSidearmDisassemblePristineMethod: MachineBasedMethod = {
-  id: 'basic_sidearm_disassemble_pristine',
+  id: 'basic_sidearm_disassemble_pristine_component',
   name: 'Disassemble (Good Condition)',
   description: 'Carefully disassemble a functional sidearm to recover high-quality components',
   
@@ -450,133 +450,117 @@ export const basicSidearmDisassemblePristineMethod: MachineBasedMethod = {
   qualityRange: [60, 85],
   
   operations: [
-    // Operation 1: Safety Inspection
+    // Operation 1: Safety Check
     {
-      id: 'disassemble_safety_inspection',
-      name: 'Safety Inspection',
+      id: 'disassemble_pristine_safety',
+      name: 'Safety Check',
       description: 'Ensure weapon is unloaded and safe to disassemble',
       requiredTag: {
         category: TagCategory.MEASURING,
         minimum: true
       },
-      baseDurationMinutes: 8,
+      baseDurationMinutes: 5,
       // No material transformation - just verification
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 2: Careful Disassembly - Sidearm → Components
+    // Operation 2: Remove Casing - Sidearm → Casing + Assembly
     {
-      id: 'disassemble_careful_breakdown',
-      name: 'Careful Disassembly',
-      description: 'Methodically disassemble weapon preserving component integrity',
+      id: 'disassemble_pristine_uncasing',
+      name: 'Remove Casing',
+      description: 'Carefully remove the outer plastic casing',
       requiredTag: {
-        category: TagCategory.PRECISION_MANIPULATION,
-        minimum: 8
+        category: TagCategory.BASIC_MANIPULATION,
+        minimum: 10
       },
-      baseDurationMinutes: 25,
+      baseDurationMinutes: 15,
       materialConsumption: [
-        { itemId: 'basic_sidearm', count: 1 } // Good condition sidearm
+        { itemId: 'basic_sidearm', count: 1 }
       ],
       materialProduction: [
         {
           itemId: 'plastic-casing',
           count: 1,
-          tags: [ItemTag.CASING, ItemTag.LOW_TECH, ItemTag.SALVAGED],
-          inheritQuality: true // High-quality recovery
+          tags: [ItemTag.CASING, ItemTag.LOW_TECH],
+          inheritQuality: true
         },
         {
           itemId: 'mechanical-assembly',
           count: 1,
-          tags: [ItemTag.ASSEMBLY, ItemTag.LOW_TECH, ItemTag.SALVAGED],
+          tags: [ItemTag.ASSEMBLY, ItemTag.LOW_TECH],
           inheritQuality: true
         }
       ],
-      can_fail: true,
-      failure_chance: 0.02, // 2% chance of damage during disassembly
+      can_fail: false,
+      failure_chance: 0,
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 3: Component Verification
+    // Operation 3: Component Inspection
     {
-      id: 'disassemble_component_verify',
-      name: 'Component Verification',
-      description: 'Inspect and verify quality of recovered components',
+      id: 'disassemble_pristine_inspection',
+      name: 'Component Inspection',
+      description: 'Inspect and catalog recovered components',
       requiredTag: {
         category: TagCategory.MEASURING,
         minimum: true
       },
-      baseDurationMinutes: 12,
-      // QC step - no material transformation
+      baseDurationMinutes: 10,
+      // No material transformation - just verification
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'quality_inspector'
-    },
-    
-    // Operation 4: Packaging & Storage
-    {
-      id: 'disassemble_packaging',
-      name: 'Packaging & Storage',
-      description: 'Properly store recovered components for future use',
-      requiredTag: {
-        category: TagCategory.BASIC_MANIPULATION,
-        minimum: 5
-      },
-      baseDurationMinutes: 10,
-      // Organization step - no material transformation
-      can_fail: false,
-      failure_chance: 0,
-      labor_skill: 'unskilled'
     }
   ],
   
   // Method properties
   output_state: 'functional',
   output_quality_range: [60, 85],
-  labor_cost_multiplier: 0.6,
-  complexity_rating: 4,
-  profit_margin_modifier: 0.7,
+  labor_cost_multiplier: 0.5,
+  complexity_rating: 2,
+  profit_margin_modifier: 0.6,
   customer_appeal: ['salvage_operations', 'component_dealers', 'recyclers']
 };
 
-// Disassemble Damaged/Poor Quality Sidearm
+// Disassemble Damaged Sidearm
 export const basicSidearmDisassembleDamagedMethod: MachineBasedMethod = {
-  id: 'basic_sidearm_disassemble_damaged',
+  id: 'basic_sidearm_disassemble_damaged_component',
   name: 'Disassemble (Damaged)',
   description: 'Salvage what components you can from a damaged sidearm',
   
-  // Output configuration for damaged goods
+  // Output configuration
   outputTags: [ItemTag.DAMAGED, ItemTag.SALVAGED],
   qualityRange: [15, 35],
   
   operations: [
-    // Operation 1: Damage Assessment
+    // Operation 1: Safety Check
     {
-      id: 'disassemble_damage_assess',
-      name: 'Damage Assessment',
-      description: 'Evaluate extent of damage and plan salvage approach',
+      id: 'disassemble_damaged_safety',
+      name: 'Safety Check', 
+      description: 'Check damaged weapon for safety hazards',
       requiredTag: {
         category: TagCategory.MEASURING,
         minimum: true
       },
-      baseDurationMinutes: 10,
-      // Assessment step - no material transformation
+      baseDurationMinutes: 5,
+      // No material transformation - just verification
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 2: Forced Extraction - Damaged Sidearm → Scrap Components
+    // Operation 2: Force Disassembly - Damaged Sidearm → Scrap + Damaged Assembly
     {
-      id: 'disassemble_forced_extraction',
-      name: 'Forced Extraction',
-      description: 'Extract usable materials from damaged weapon structure',
+      id: 'disassemble_damaged_breakdown',
+      name: 'Force Disassembly',
+      description: 'Forcefully remove damaged casing and internals',
       requiredTag: {
         category: TagCategory.BASIC_MANIPULATION,
         minimum: 8
       },
-      baseDurationMinutes: 30,
+      baseDurationMinutes: 20,
       materialConsumption: [
         { itemId: 'basic_sidearm', count: 1, tags: [ItemTag.DAMAGED] }
       ],
@@ -585,47 +569,31 @@ export const basicSidearmDisassembleDamagedMethod: MachineBasedMethod = {
           itemId: 'plastic-scrap',
           count: 1,
           tags: [ItemTag.SALVAGED],
-          quality: 20 // Low quality scrap
+          quality: 15
         },
         {
           itemId: 'mechanical-assembly',
           count: 1,
-          tags: [ItemTag.ASSEMBLY, ItemTag.LOW_TECH, ItemTag.DAMAGED, ItemTag.SALVAGED],
-          quality: 25 // Damaged but usable assembly
+          tags: [ItemTag.ASSEMBLY, ItemTag.LOW_TECH, ItemTag.DAMAGED],
+          quality: 20
         }
       ],
       can_fail: true,
-      failure_chance: 0.15, // 15% chance to destroy everything
+      failure_chance: 0.1, // 10% chance to destroy everything
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 3: Material Sorting
+    // Operation 3: Salvage Assessment
     {
-      id: 'disassemble_material_sorting',
-      name: 'Material Sorting',
-      description: 'Sort salvaged materials by usability and quality',
-      requiredTag: {
-        category: TagCategory.BASIC_MANIPULATION,
-        minimum: 5
-      },
-      baseDurationMinutes: 15,
-      // Sorting step - no material transformation
-      can_fail: false,
-      failure_chance: 0,
-      labor_skill: 'unskilled'
-    },
-    
-    // Operation 4: Salvage Documentation
-    {
-      id: 'disassemble_salvage_doc',
-      name: 'Salvage Documentation',
-      description: 'Document recovered materials for inventory tracking',
+      id: 'disassemble_damaged_assessment',
+      name: 'Salvage Assessment',
+      description: 'Assess value of recovered materials',
       requiredTag: {
         category: TagCategory.MEASURING,
         minimum: true
       },
-      baseDurationMinutes: 8,
-      // Documentation step - no material transformation
+      baseDurationMinutes: 10,
+      // No material transformation - just assessment
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'quality_inspector'
@@ -636,8 +604,8 @@ export const basicSidearmDisassembleDamagedMethod: MachineBasedMethod = {
   output_state: 'junk',
   output_quality_range: [15, 35],
   labor_cost_multiplier: 0.4,
-  complexity_rating: 3,
-  profit_margin_modifier: 0.3,
+  complexity_rating: 2,
+  profit_margin_modifier: 0.4,
   customer_appeal: ['scrap_dealers', 'budget_operations', 'salvagers']
 };
 

@@ -336,147 +336,256 @@ function OperationFlowDisplay({ job }: { job: MachineSlotJob }) {
   );
 }
 
-interface JobFlowDisplayProps {
-  jobs: MachineSlotJob[];
+interface UnifiedJobListProps {
+  workspace: MachineWorkspace;
+  allJobs: MachineSlotJob[];
 }
 
-function JobFlowDisplay({ jobs }: JobFlowDisplayProps) {
+function UnifiedJobList({ workspace, allJobs }: UnifiedJobListProps) {
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
+  const [completedJobTimers, setCompletedJobTimers] = useState<Map<string, number>>(new Map());
   const cancelMachineJob = useGameStore(state => state.cancelMachineJob);
   
-  // Show up to 3 active jobs
-  const activeJobs = jobs.filter(j => j.state === 'in_progress').slice(0, 3);
+  // Collect all jobs: active (from machines), queued, and recently completed
+  const activeJobs = Array.from(workspace.machines.values())
+    .map(slot => slot.currentJob)
+    .filter((job): job is MachineSlotJob => job !== null && job !== undefined);
+  
+  const queuedJobs = workspace.jobQueue || [];
+  const recentCompletedJobs = (workspace.completedJobs || []).slice(-5); // Last 5 completed jobs
+  
+  // Combine all jobs and filter out any undefined/null entries
+  const combinedJobs = [...activeJobs, ...queuedJobs, ...recentCompletedJobs]
+    .filter((job): job is MachineSlotJob => job !== null && job !== undefined);
+  
+  // Filter out completed jobs that have been showing for more than 5 seconds
+  const currentTime = Date.now();
+  const visibleJobs = combinedJobs.filter(job => {
+    // Double-check job is defined
+    if (!job || !job.id) {
+      return false;
+    }
+    
+    if (job.state === 'completed') {
+      const completedTime = completedJobTimers.get(job.id);
+      if (completedTime && (currentTime - completedTime) > 5000) {
+        return false; // Hide after 5 seconds
+      }
+      if (!completedTime) {
+        // First time seeing this completed job, start timer
+        setCompletedJobTimers(prev => new Map(prev).set(job.id, currentTime));
+      }
+    }
+    return true;
+  });
+  
+  // Clean up old timers
+  useEffect(() => {
+    const cleanup = setInterval(() => {
+      const now = Date.now();
+      setCompletedJobTimers(prev => {
+        const updated = new Map(prev);
+        for (const [jobId, time] of updated) {
+          if (now - time > 6000) { // Clean up after 6 seconds (1 second buffer)
+            updated.delete(jobId);
+          }
+        }
+        return updated;
+      });
+    }, 1000);
+    
+    return () => clearInterval(cleanup);
+  }, []);
   
   const handleCancelJob = (jobId: string, facilityId: string) => {
     cancelMachineJob(facilityId, jobId);
     setShowCancelConfirm(null);
   };
   
+  const toggleJobExpansion = (jobId: string) => {
+    setExpandedJobs(prev => {
+      const updated = new Set(prev);
+      if (updated.has(jobId)) {
+        updated.delete(jobId);
+      } else {
+        updated.add(jobId);
+      }
+      return updated;
+    });
+  };
+  
+  const getJobStatusInfo = (job: MachineSlotJob) => {
+    switch (job.state) {
+      case 'queued':
+        return {
+          statusText: 'QUEUED',
+          statusColor: 'text-blue-400',
+          borderColor: 'border-blue-600',
+          bgColor: 'bg-blue-900'
+        };
+      case 'in_progress':
+        return {
+          statusText: 'IN PROGRESS',
+          statusColor: 'text-yellow-400',
+          borderColor: 'border-yellow-600',
+          bgColor: 'bg-yellow-900'
+        };
+      case 'completed':
+        return {
+          statusText: 'COMPLETED',
+          statusColor: 'text-green-400',
+          borderColor: 'border-green-600',
+          bgColor: 'bg-green-900'
+        };
+      default:
+        return {
+          statusText: 'UNKNOWN',
+          statusColor: 'text-gray-400',
+          borderColor: 'border-gray-600',
+          bgColor: 'bg-gray-900'
+        };
+    }
+  };
+  
+  const totalJobs = visibleJobs.length;
+  const activeCount = activeJobs.length;
+  const queuedCount = queuedJobs.length;
+  
   return (
     <div className="border border-gray-600 bg-gray-900 p-3 mb-4">
-      <h3 className="text-gray-400 font-bold mb-3">ACTIVE JOBS</h3>
+      <h3 className="text-gray-400 font-bold mb-3">
+        FACILITY JOBS ({totalJobs}) - Active: {activeCount}, Queued: {queuedCount}
+      </h3>
       
-      {activeJobs.length === 0 ? (
-        <div className="text-gray-500">No active jobs</div>
-      ) : (
-        activeJobs.map(job => (
-          <div key={job.id} className="mb-3 last:mb-0">
-            <div className="flex justify-between items-start mb-1">
-              <div className="text-sm text-white">
-                {formatProductName(job.productId)} ({job.method.name})
-              </div>
-              <button
-                onClick={() => setShowCancelConfirm(showCancelConfirm === job.id ? null : job.id)}
-                className="text-xs text-red-400 hover:text-red-300 px-1"
-              >
-                ✕
-              </button>
-            </div>
-            
-            {/* Cancel confirmation */}
-            {showCancelConfirm === job.id && (
-              <div className="mb-2 p-2 bg-gray-800 border border-red-600 text-xs">
-                <div className="text-red-400 font-semibold mb-1">Cancel Job?</div>
-                <div className="text-gray-300 mb-2">
-                  Progress: {job.completedOperations.length}/{job.method.operations.length} operations
-                </div>
-                <div className="text-gray-400 mb-2">
-                  {job.jobInventory ? (
-                    <div>All job inventory will be returned to facility</div>
-                  ) : (
-                    <div>Created components will be recovered</div>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleCancelJob(job.id, job.facilityId)}
-                    className="bg-red-700 hover:bg-red-600 text-red-100 px-2 py-1 text-xs"
-                  >
-                    Cancel Job
-                  </button>
-                  <button
-                    onClick={() => setShowCancelConfirm(null)}
-                    className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 text-xs"
-                  >
-                    Keep Job
-                  </button>
-                </div>
-              </div>
-            )}
-            
-            <div className="flex space-x-2 text-xs">
-              {job.method.operations.map((op, idx) => {
-                const isComplete = job.completedOperations.includes(op.id);
-                const isCurrent = idx === job.currentOperationIndex;
-                const isPending = idx > job.currentOperationIndex;
-                
-                let statusClass = 'text-gray-600';
-                let statusSymbol = '○';
-                
-                if (isComplete) {
-                  statusClass = 'text-green-400';
-                  statusSymbol = '✓';
-                } else if (isCurrent) {
-                  statusClass = 'text-yellow-400';
-                  statusSymbol = '◐';
-                } else if (isPending) {
-                  statusClass = 'text-gray-500';
-                  statusSymbol = '○';
-                }
-                
-                return (
-                  <div key={op.id} className={`${statusClass}`}>
-                    <span>{statusSymbol}</span>
-                    <span className="ml-1">{op.name}</span>
-                  </div>
-                );
-              })}
-            </div>
-            
-            {/* Job Inventory Display */}
-            <JobInventoryDisplay job={job} />
-            
-            {/* Operation Flow Display */}
-            <OperationFlowDisplay job={job} />
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
-interface JobQueueProps {
-  workspace: MachineWorkspace;
-}
-
-function JobQueue({ workspace }: JobQueueProps) {
-  // Use the facility-wide job queue
-  const queuedJobs = workspace.jobQueue;
-
-  return (
-    <div className="border border-gray-600 bg-gray-900 p-3">
-      <h3 className="text-gray-400 font-bold mb-3">FACILITY JOB QUEUE ({queuedJobs.length})</h3>
-      
-      <div className="max-h-32 overflow-y-auto">
-        {queuedJobs.length === 0 ? (
-          <div className="text-gray-500 text-sm">No jobs in queue</div>
+      <div className="max-h-96 overflow-y-auto">
+        {visibleJobs.length === 0 ? (
+          <div className="text-gray-500">No jobs</div>
         ) : (
-          <div className="space-y-2">
-            {queuedJobs.map(job => (
-              <div key={job.id} className="text-xs border-l-2 border-gray-600 pl-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-white">
-                    {formatProductName(job.productId)} ({job.method.name})
-                  </span>
-                  {job.rushOrder && (
-                    <span className="text-red-400 font-bold">RUSH</span>
+          <div className="space-y-3">
+            {visibleJobs.map(job => {
+              // Safety check - ensure job is defined
+              if (!job || !job.id) {
+                return null;
+              }
+              
+              const statusInfo = getJobStatusInfo(job);
+              const isExpanded = expandedJobs.has(job.id);
+              const canCancel = job.state === 'queued' || job.state === 'in_progress';
+              
+              return (
+                <div key={job.id} className={`border-l-4 ${statusInfo.borderColor} pl-3 py-2 ${statusInfo.bgColor} bg-opacity-10`}>
+                  <div className="flex justify-between items-start mb-1">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleJobExpansion(job.id)}
+                          className="text-xs text-gray-400 hover:text-gray-200"
+                        >
+                          {isExpanded ? '▼' : '►'}
+                        </button>
+                        <div className="text-sm text-white">
+                          {formatProductName(job.productId)} ({job.method.name})
+                        </div>
+                        <span className={`text-xs font-bold ${statusInfo.statusColor}`}>
+                          {statusInfo.statusText}
+                        </span>
+                        {job.rushOrder && (
+                          <span className="text-red-400 font-bold text-xs">RUSH</span>
+                        )}
+                      </div>
+                      
+                      {job.state === 'queued' && (
+                        <div className="text-xs text-gray-400 mt-1">
+                          Next: {job.method.operations[job.currentOperationIndex]?.name}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {canCancel && (
+                      <button
+                        onClick={() => setShowCancelConfirm(showCancelConfirm === job.id ? null : job.id)}
+                        className="text-xs text-red-400 hover:text-red-300 px-1"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Cancel confirmation */}
+                  {showCancelConfirm === job.id && canCancel && (
+                    <div className="mb-2 p-2 bg-gray-800 border border-red-600 text-xs">
+                      <div className="text-red-400 font-semibold mb-1">Cancel Job?</div>
+                      <div className="text-gray-300 mb-2">
+                        Progress: {job.completedOperations.length}/{job.method.operations.length} operations
+                      </div>
+                      <div className="text-gray-400 mb-2">
+                        {job.jobInventory ? (
+                          <div>All job inventory will be returned to facility</div>
+                        ) : (
+                          <div>Created components will be recovered</div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleCancelJob(job.id, job.facilityId)}
+                          className="bg-red-700 hover:bg-red-600 text-red-100 px-2 py-1 text-xs"
+                        >
+                          Cancel Job
+                        </button>
+                        <button
+                          onClick={() => setShowCancelConfirm(null)}
+                          className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 text-xs"
+                        >
+                          Keep Job
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Expanded job details */}
+                  {isExpanded && (
+                    <div className="mt-2 ml-4 space-y-2">
+                      {/* Operation progress */}
+                      <div className="flex flex-wrap gap-1 text-xs">
+                        {job.method.operations.map((op, idx) => {
+                          const isComplete = job.completedOperations.includes(op.id);
+                          const isCurrent = idx === job.currentOperationIndex;
+                          const isPending = idx > job.currentOperationIndex;
+                          
+                          let statusClass = 'text-gray-600';
+                          let statusSymbol = '○';
+                          
+                          if (isComplete) {
+                            statusClass = 'text-green-400';
+                            statusSymbol = '✓';
+                          } else if (isCurrent) {
+                            statusClass = 'text-yellow-400';
+                            statusSymbol = '◐';
+                          } else if (isPending) {
+                            statusClass = 'text-gray-500';
+                            statusSymbol = '○';
+                          }
+                          
+                          return (
+                            <div key={op.id} className={`${statusClass} flex items-center`}>
+                              <span>{statusSymbol}</span>
+                              <span className="ml-1">{op.name}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Job Inventory Display */}
+                      {job.state === 'in_progress' && <JobInventoryDisplay job={job} />}
+                      
+                      {/* Operation Flow Display */}
+                      {job.state === 'in_progress' && <OperationFlowDisplay job={job} />}
+                    </div>
                   )}
                 </div>
-                <div className="text-gray-400">
-                  Next: {job.method.operations[job.currentOperationIndex]?.name}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -783,8 +892,6 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
         )}
       </div>
 
-      {/* Job Queue */}
-      {workspace && <JobQueue workspace={workspace} />}
     </div>
   );
 }
@@ -918,8 +1025,8 @@ export function MachineWorkspaceView() {
       {/* Production interface */}
       <ProductionInterface facility={facility} />
       
-      {/* Job flow visualization */}
-      <JobFlowDisplay jobs={allJobs.filter(j => j.state === 'in_progress')} />
+      {/* Unified job list */}
+      <UnifiedJobList workspace={workspace} allJobs={allJobs} />
       
       {/* Summary stats */}
       <div className="mt-4 pt-4 border-t border-gray-700 text-xs text-gray-500">
