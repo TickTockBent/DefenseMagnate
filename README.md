@@ -236,7 +236,7 @@ Three basic sidearm manufacturing methods available:
 - **[Materials & Contracts](docs/Materials%20and%20Contracts%20v1.md)**: 🆕 Market and contract systems
 - **[Manufacturing System](docs/product-manufacture.md)**: Detailed manufacturing documentation
 - **[Equipment System](docs/facility-object.md)**: Equipment and facility mechanics
-- **[ASCII Style Guide](docs/ascii-style-guide.md)**: UI design patterns and conventions
+- **[Try it out!](https://ticktockbent.github.io/DefenseMagnate/)**: Hosted on github pages for now. Keep in mind it's nowhere near completed!
 
 ## 🎯 Current Status
 
