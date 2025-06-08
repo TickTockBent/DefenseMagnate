@@ -34,11 +34,7 @@ export type {
   RecoveryRisk,
   ComponentGap,
   DynamicOperation,
-  ManufacturingPlan,
-  Enhancement,
-  EnhancementRequirement,
-  EnhancementEffect,
-  EnhancementCost
+  ManufacturingPlan
 } from './manufacturing';
 
 export type {
@@ -87,6 +83,9 @@ export * from './contracts';
 // Unified item system types
 export * from './items';
 export * from './inventory';
+
+// Enhancement system types (Manufacturing v2 Phase 2)
+export * from './enhancement';
 
 // Re-export common utilities
 export * from '../utils/formatters';

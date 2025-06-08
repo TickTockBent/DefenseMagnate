@@ -183,7 +183,8 @@ export class MachineWorkspaceManager {
     method: MachineBasedMethod,
     quantity: number = 1,
     priority: JobPriority = JobPriority.NORMAL,
-    rushOrder: boolean = false
+    rushOrder: boolean = false,
+    enhancementSelection?: import('../types').EnhancementSelection
   ): MachineSlotJob {
     const workspace = this.workspaces.get(facilityId);
     if (!workspace) throw new Error('Workspace not initialized');
@@ -216,7 +217,9 @@ export class MachineWorkspaceManager {
           productId,
           quantity,
           [], // No specific input items for "forge new"
-          facilityInventoryArray
+          facilityInventoryArray,
+          enhancementSelection,
+          facility
         );
         
         // Preserve the original method identification
@@ -258,7 +261,10 @@ export class MachineWorkspaceManager {
       
       // MANUFACTURING V2: Initialize sub-operations if this is a v2 job
       isManufacturingV2: isManufacturingV2,
-      subOperations: isManufacturingV2 ? new Map() : undefined
+      subOperations: isManufacturingV2 ? new Map() : undefined,
+      
+      // PHASE 2: Enhancement selection
+      enhancementSelection
     };
     
     // Move required materials from facility to job inventory

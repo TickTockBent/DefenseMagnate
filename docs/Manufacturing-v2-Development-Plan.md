@@ -3,13 +3,12 @@
 
 This document outlines the phased implementation plan for Manufacturing v2, transforming the current component-based system into a dynamic, intelligent manufacturing system.
 
-## 🎯 Implementation Status: Phase 1 Complete
+## 🎯 Implementation Status: Phase 2 Complete
 
 **✅ Phase 1: Core Dynamic Workflow Engine** - COMPLETE  
-**⏳ Phase 2: Enhancement Modifier System** - Pending  
-**⏳ Phase 3: Condition-Aware Processing** - Pending  
-**⏳ Phase 4: UI Enhancement** - Pending  
-**⏳ Phase 5: Advanced Integration** - Pending  
+**✅ Phase 2: Enhancement Modifier System** - COMPLETE  
+**⏳ Phase 3: Intelligent Job Creation Interface** - Pending (Combined 3+4)  
+**⏳ Phase 4: Advanced Integration & Research Framework** - Pending  
 
 ### What's Working Now:
 - **Smart Manufacturing** method available in Basic Sidearm production
@@ -18,6 +17,10 @@ This document outlines the phased implementation plan for Manufacturing v2, tran
 - Component gap analysis and intelligent material planning
 - Condition analysis for damaged/junk items with recovery predictions
 - Full integration with existing machine workspace system
+- **Enhancement system** with equipment-based discovery and dynamic selection
+- **Enhancement UI** in manufacturing interface with cost/benefit analysis
+- **Enhanced job tracking** with enhancement data through entire workflow
+- **Market value calculations** for enhanced products with profitability preview
 
 ### How to Test Phase 1:
 1. **Start a Basic Sidearm job** - Select "Smart Manufacturing (basic_sidearm)" method
@@ -26,14 +29,38 @@ This document outlines the phased implementation plan for Manufacturing v2, tran
 4. **Check hierarchy compliance** - No steel can be "disassembled" back to scrap steel
 5. **Material preparation** - Steel will be properly prepared into billets before component creation
 
+### How to Test Phase 2:
+1. **Select a manufacturing method** - Choose any Basic Sidearm or Tactical Knife method
+2. **Look for Enhancement section** - Should appear below method description if equipment unlocks any
+3. **Select enhancements** - Check boxes for desired enhancements and see real-time cost/benefit analysis
+4. **Start enhanced job** - Job will carry enhancement data and apply quality/market value bonuses
+5. **Check profitability** - Green = profitable, yellow = marginal, red = unprofitable enhancements
+
 ## Overview
 
-Manufacturing v2 will replace static recipe-based manufacturing with an intelligent system that:
-- Analyzes item conditions and generates optimal workflows
-- Provides enhancement options based on available technology
-- Handles special status conditions automatically
-- Integrates with markets and contracts for enhanced products
-- **Implements clear manufacturing hierarchy with logical assembly/disassembly boundaries**
+Manufacturing v2 represents a **revolutionary paradigm shift** from static recipe-based manufacturing to an intelligent, inventory-driven production system that:
+
+### **Core Revolution: Infinite Scalability**
+Instead of predefining every possible manufacturing scenario ("clean watery rifle", "heat-damaged corroded knife"), the system **intelligently analyzes any item in any condition** and generates appropriate workflows automatically.
+
+**Example**: Finding a water-damaged rifle crate:
+- **OLD SYSTEM**: Need predefined "repair_watery_rifle" job 
+- **NEW SYSTEM**: System detects [drenched, damaged] tags → generates drying + repair workflow automatically
+
+### **Key Capabilities**:
+- **Inventory-Driven Intelligence**: Analyzes what you have, suggests what you can do
+- **Automatic Workflow Generation**: Creates repair, disassembly, and treatment operations on-demand  
+- **Condition-Aware Processing**: Handles any combination of status tags intelligently
+- **Enhancement Integration**: Phase 2 enhancement system seamlessly integrated
+- **Infinite Product Support**: Tree-based interface scales to thousands of products
+- **Contract Intelligence**: Matches inventory to customer requirements automatically
+- **Research Integration**: Products and enhancements unlock through discovery and technology progression
+
+### **Technical Foundation**:
+- **Three-tier manufacturing hierarchy** with logical assembly/disassembly boundaries
+- **Dynamic operation generation** based on item tier, condition, and available equipment
+- **Equipment-based capability discovery** for enhancements and alternative methods
+- **Scalable UI architecture** supporting complex workflows and large product catalogs
 
 ## Current State Analysis
 
@@ -252,10 +279,11 @@ export const basicSidearmDisassembleMethod: MachineBasedMethod =
   ManufacturingV2Integration.createSmartMethod('basic_sidearm_disassembly');
 ```
 
-## Phase 2: Enhancement Modifier System
+## ✅ Phase 2: Enhancement Modifier System - COMPLETE
 
-### 2.1 Enhancement Discovery
+### ✅ 2.1 Enhancement Discovery - COMPLETE
 **Goal**: Detect available enhancements based on equipment and knowledge
+**Status**: COMPLETE
 
 **New Types**:
 ```typescript
@@ -282,126 +310,269 @@ interface EnhancementEffect {
 }
 ```
 
-**New Systems**:
-- `data/enhancements.ts` - Enhancement definitions database
-- `systems/enhancementManager.ts` - Discovers available enhancements
-- `systems/enhancementCalculator.ts` - Calculates costs and benefits
+**✅ Implemented Systems**:
+- ✅ `data/enhancements.ts` - Enhancement definitions database with 9 enhancements
+- ✅ `systems/enhancementManager.ts` - Discovers available enhancements based on equipment
+- ✅ `systems/enhancementCalculator.ts` - Calculates costs, benefits, and market values
 
-### 2.2 Enhancement Integration
+### ✅ 2.2 Enhancement Integration - COMPLETE
 **Goal**: Integrate enhancements into dynamic workflows
+**Status**: COMPLETE
 
-**Modified Systems**:
-- `systems/workflowGenerator.ts` - Insert enhancement operations
-- `systems/operationPlanner.ts` - Handle enhancement dependencies
-- Job system - Track enhancement selections
+**✅ Modified Systems**:
+- ✅ `systems/workflowGenerator.ts` - Accepts enhancement selections for workflow modification
+- ✅ `systems/manufacturingV2Integration.ts` - Passes enhancements to dynamic workflow generation
+- ✅ Job system - Tracks enhancement selections through entire manufacturing process
+- ✅ `types/machineSlot.ts` - MachineSlotJob interface includes enhancement data
 
-### 2.3 Market Value Integration
+### ✅ 2.3 Market Value Integration - COMPLETE
 **Goal**: Calculate enhanced product values
+**Status**: COMPLETE
 
-**New Systems**:
-- `systems/productPricer.ts` - Calculate market value based on enhancements
-- Market integration for enhanced product sales
-- Contract system support for enhancement requirements
+**✅ Implemented Systems**:
+- ✅ `systems/enhancementCalculator.ts` - Market value calculations with enhancement multipliers
+- ✅ UI integration showing real-time profitability analysis
+- ✅ Cost/benefit preview with color-coded recommendations
+- ✅ Enhanced product tracking ready for market/contract integration
 
-## Phase 3: Condition-Aware Processing
+## Phase 3: Intelligent Job Creation Interface (Combined 3+4)
 
-### 3.1 Special Status Tag Handling
-**Goal**: Handle [drenched], [corroded], [heat-damaged], etc. automatically
+**Core Philosophy**: Replace static recipe selection with intelligent, inventory-driven operation discovery that scales infinitely and handles any item condition automatically.
 
-**New Types**:
+### 3.1 Inventory-Driven Action Discovery
+**Goal**: Automatically detect valid operations for any item in any condition
+
+**Revolutionary Approach**:
+Instead of predefining every possible state ("clean watery rifle", "heat-damaged corroded knife"), the system intelligently analyzes items and generates appropriate workflows:
+
 ```typescript
-interface StatusTagHandler {
-  tag: ItemTag;
-  requiredTreatments: TreatmentOperation[];
-  equipmentRequirements: string[];
-  riskFactors: RiskFactor[];
-}
+// OLD WAY (Doesn't Scale)
+predefinedJobs = [
+  "basic_sidearm_forge_new",
+  "basic_sidearm_repair_damaged", 
+  "basic_sidearm_clean_watery",
+  "basic_sidearm_repair_corroded_watery",
+  // ... thousands of combinations
+]
 
-interface RiskFactor {
-  description: string;
-  probability: number;
-  impact: 'component_loss' | 'quality_reduction' | 'time_increase';
+// NEW WAY (Infinite Scalability)
+const actions = InventoryActionDiscovery.analyzeItem(item);
+// Returns: [repair, disassemble, clean, refurbish, scrap] based on actual condition
+```
+
+**Key Systems**:
+- `systems/inventoryActionDiscovery.ts` - Detects valid operations for any item
+- `systems/automaticWorkflowGeneration.ts` - Creates repair/disassembly workflows on-demand
+- `systems/conditionTreatmentPlanner.ts` - Handles [drenched], [corroded], [heat-damaged] automatically
+
+### 3.2 Two-Panel Job Creation Interface
+**Goal**: Scalable UI that handles thousands of products and complex workflows
+
+**Left Panel: Product & Action Selection**
+- **Product Tree**: Hierarchical categorization (Weapons → Handheld → Basic Sidearm)
+- **Inventory Actions**: Context-sensitive operations for items in storage
+- **Search & Filters**: Find products quickly in large catalogs
+- **Dynamic Categories**: Tree built from BaseItem definitions, scales infinitely
+
+**Right Panel: Job Configuration & Preview**
+- **Operation Preview**: Complete workflow visualization before starting
+- **Enhancement Integration**: Enhancement system from Phase 2
+- **Cost/Benefit Analysis**: Materials, time, and profitability preview
+- **Smart Recommendations**: System suggestions for efficiency and profit
+
+### 3.3 Automatic Operation Generation
+**Goal**: Generate repair, disassembly, and treatment operations automatically
+
+**Repair Operations**:
+```typescript
+// System analyzes damaged sidearm and generates:
+RepairWorkflow {
+  1. Disassembly (15min) → Components analysis
+  2. Condition Treatment (30min) → Clean [drenched] parts  
+  3. Component Replacement (45min) → Replace broken parts
+  4. Final Assembly (35min) → Rebuild complete weapon
+  
+  Materials: 0.7 steel, 0.3 plastic
+  Time: 2h 5min
+  Cost: 45cr → Value: 180cr → Profit: 135cr
 }
 ```
 
-**New Systems**:
-- `systems/statusTagProcessor.ts` - Handles special condition tags
-- `data/treatmentOperations.ts` - Treatment operation definitions
-- Equipment requirement validation for treatments
+**Disassembly Operations**:
+```typescript
+// System reads assembly definition and creates reverse workflow automatically
+DisassemblyWorkflow {
+  1. Careful Disassembly (20min) → Preserve component quality
+  2. Component Sorting (5min) → Categorize by condition
+  3. Cleaning Operations (15min) → Remove [drenched] tag if needed
+  
+  Expected Recovery: 1x Mechanical Assembly [functional], 1x Small Tube, 1x Small Casing
+  Component Value: 95cr vs Intact Value: 120cr
+}
+```
 
-### 3.2 Treatment Operation Integration
-**Goal**: Seamlessly integrate treatment operations into workflows
+**Treatment Operations**:
+```typescript
+// Automatic condition handling - no predefined "watery rifle" jobs needed
+TreatmentWorkflow {
+  DetectedConditions: [drenched, corroded]
+  GeneratedTreatments: [
+    1. Drying Process (45min) → Remove [drenched] tag
+    2. Corrosion Removal (60min) → Remove [corroded] tag  
+    3. Quality Assessment (10min) → Determine final condition
+  ]
+  EquipmentRequired: [heating_station, chemical_bath]
+  RiskFactors: [15% chance component_degradation, 5% chance treatment_failure]
+}
+```
 
-**Implementation**:
-- Extend workflow generator to insert treatment operations
-- Add treatment progress tracking to job system
-- Create specialized UI for treatment operation monitoring
+### 3.4 Intelligent User Experience
+**Goal**: Transform manufacturing from recipe-following to production planning
 
-### 3.3 Equipment Substitution
-**Goal**: Handle missing equipment with alternative methods
+**User Workflow Examples**:
 
-**New Systems**:
-- `systems/equipmentSubstitution.ts` - Find alternative approaches
-- `data/equipmentAlternatives.ts` - Substitution matrix
-- Penalty calculation for suboptimal equipment
+**Scenario: Water-Damaged Rifle Crate**
+1. **System Detection**: "Basic Sidearm [drenched, damaged] (12) detected in inventory"
+2. **Action Discovery**: 🔧 Repair, 🔬 Disassemble, 🧽 Clean & Sell, 🗑️ Scrap
+3. **Repair Preview**: Shows drying → disassembly → component replacement → reassembly
+4. **Batch Option**: "Process all 12 rifles together? (saves 3 hours via parallel processing)"
+5. **Enhancement**: "Add corrosion resistance? (+25min each, +35cr value each)"
 
-## Phase 4: User Interface Enhancement
+**Scenario: Unknown Component Analysis**
+1. **Component Discovery**: Player finds "Mysterious Mechanical Assembly [functional]"
+2. **Compatibility Analysis**: "Can be used in: Basic Sidearm, Advanced Rifle, Plasma Weapon"
+3. **Action Options**: 🔬 Disassemble for components, 📦 Use in assembly, 🔍 Analyze design
+4. **Value Comparison**: "Worth 45cr as parts vs 120cr if used in Basic Sidearm"
 
-### 4.1 Dynamic Job Planning Interface
-**Goal**: Replace product dropdown with intelligent job planner
+### 3.5 Technical Implementation Architecture
 
 **New Components**:
-- `components/JobPlannerInterface.tsx` - Main planning interface
-- `components/ConditionAnalysisDisplay.tsx` - Show input analysis
-- `components/EnhancementSelector.tsx` - Enhancement selection UI
-- `components/WorkflowPreview.tsx` - Operation sequence preview
+```typescript
+// Main interface replacing current manufacturing tab
+<IntelligentJobCreationInterface>
+  <ProductTreePanel />           // Scalable product browser
+  <InventoryActionsPanel />      // Context-sensitive operations  
+  <WorkflowPreviewPanel />       // Complete operation visualization
+  <EnhancementIntegrationPanel />// Phase 2 enhancement system
+  <SmartRecommendationsPanel />  // AI-like suggestions
+</IntelligentJobCreationInterface>
+```
 
-### 4.2 Real-Time Workflow Visualization
-**Goal**: Show live workflow adaptation during job execution
+**Backend Systems**:
+```typescript
+class InventoryActionDiscovery {
+  static analyzeItem(item: ItemInstance): AvailableAction[] {
+    // Determine valid operations based on:
+    // - Item tier (raw/shaped/assembly)  
+    // - Current condition tags
+    // - Available equipment capabilities
+    // - Player knowledge/research level
+  }
+}
 
-**Features**:
-- Live component recovery vs predictions
-- Dynamic workflow adjustments
-- Real-time cost-benefit updates
-- Quality prediction updates
+class AutomaticWorkflowGeneration {
+  static generateRepairWorkflow(item: ItemInstance): RepairWorkflow {
+    // Creates complete repair sequence automatically
+  }
+  
+  static generateDisassemblyWorkflow(item: ItemInstance): DisassemblyWorkflow {
+    // Reverses assembly definition to create disassembly operations
+  }
+}
 
-### 4.3 Enhanced Job Management
-**Goal**: Improve job list to show dynamic information
+class ConditionTreatmentPlanner {
+  static generateTreatmentSequence(conditions: ItemTag[]): TreatmentOperation[] {
+    // Handles [drenched], [corroded], [heat-damaged] etc automatically
+  }
+}
+```
 
-**Enhancements**:
-- Show selected enhancements in job display
-- Display condition treatment progress
-- Real-time profitability tracking
-- Component recovery tracking
+### 3.6 Scalability & Future-Proofing
 
-## Phase 5: Advanced Integration
+**Handles Infinite Complexity**:
+- **1000+ Products**: Tree structure remains navigable
+- **Any Condition Combination**: [drenched, corroded, heat-damaged, junk] → automatic treatment plan
+- **Equipment Substitution**: Missing tools → alternative methods with trade-offs
+- **Batch Processing**: Process dozens of similar items efficiently
+- **Research Integration**: New products appear in tree as they're discovered
 
-### 5.1 Market Integration
-**Goal**: Full market support for enhanced products
+**Performance Optimizations**:
+- **Lazy Loading**: Product details loaded on-demand
+- **Cached Analysis**: Store workflow analysis results
+- **Background Processing**: Generate previews without blocking UI
+- **Virtual Scrolling**: Handle massive product catalogs
 
-**Features**:
-- Enhanced product pricing in markets
-- Premium market segments for enhanced goods
-- Contract enhancement requirements
-- Component trading for premium parts
+## Phase 4: Advanced Integration & Research Framework
 
-### 5.2 Research & Development Framework
-**Goal**: Prepare for future R&D integration
+### 4.1 Market & Contract Integration
+**Goal**: Full integration of intelligent manufacturing with economic systems
 
-**Framework**:
-- Research unlock system for enhancements
-- Technology prerequisites for advanced operations
-- Skill-based enhancement availability
-- Equipment upgrade paths
+**Enhanced Product Markets**:
+- **Dynamic Pricing**: Enhanced products command premium prices based on applied enhancements
+- **Contract Requirements**: Customers specify condition and enhancement requirements
+  - "Need 50x Basic Sidearm [corrosion-resistant, precision-machined] by Tuesday"
+  - "Bulk order: 200x Tactical Knife [any condition] for militia training"
+- **Component Trading**: Sell recovered components from disassembly operations
+- **Condition-Based Pricing**: [pristine] vs [functional] vs [damaged] pricing tiers
 
-### 5.3 Performance Optimization
-**Goal**: Ensure system scales efficiently
+**Smart Contract Matching**:
+- **Inventory Analysis**: "You have 12 damaged sidearms - Repair for Contract #47?"
+- **Enhancement Recommendations**: "Add tactical enhancement for 40% price bonus?"
+- **Batch Processing**: "Process entire contract quantity together for efficiency bonus"
 
-**Optimizations**:
-- Caching for condition analysis
-- Efficient workflow generation
-- Minimal memory overhead for dynamic jobs
-- Save/load compatibility
+### 4.2 Research & Development Framework
+**Goal**: Knowledge-gated manufacturing with technology progression
+
+**Research Integration**:
+- **Product Discovery**: New products appear in tree as they're researched/discovered
+- **Enhancement Unlocks**: Advanced enhancements require specific research
+- **Technology Prerequisites**: Complex products need prerequisite knowledge
+- **Reverse Engineering**: Disassemble unknown items to learn their manufacturing methods
+
+**Knowledge Systems**:
+```typescript
+interface PlayerKnowledge {
+  knownProducts: Set<string>;           // Products player can manufacture
+  knownEnhancements: Set<string>;       // Available enhancement techniques  
+  researchProgress: Map<string, number>; // Ongoing research projects
+  blueprintLibrary: Blueprint[];        // Collected manufacturing plans
+}
+
+interface Blueprint {
+  productId: string;
+  discoveryMethod: 'research' | 'reverse_engineering' | 'purchase' | 'found';
+  requiredKnowledge: string[];          // Prerequisites
+  difficulty: number;                   // Manufacturing complexity
+  variations: EnhancementOption[];      // Known enhancement methods
+}
+```
+
+**Dynamic Product Tree**:
+- **Locked Items**: Show research requirements and progress
+- **Discovery Progression**: Tree expands as knowledge grows
+- **Technology Gates**: Advanced categories unlock through research
+- **Player Progression**: From basic weapons → advanced systems → experimental tech
+
+### 4.3 Performance & Scalability Optimization
+**Goal**: Ensure system scales to industrial complexity efficiently
+
+**Computational Optimizations**:
+- **Cached Workflow Analysis**: Store generated workflows for reuse
+- **Background Processing**: Generate previews without blocking UI
+- **Incremental Updates**: Only recalculate changed elements
+- **Memory Management**: Efficient storage for large inventories and product catalogs
+
+**UI Performance**:
+- **Virtual Scrolling**: Handle 1000+ product trees smoothly
+- **Lazy Loading**: Load product details only when needed
+- **Debounced Search**: Efficient filtering of large catalogs
+- **Progressive Enhancement**: Core functionality works, advanced features enhance
+
+**Save/Load Compatibility**:
+- **Migration Systems**: Handle save format changes gracefully
+- **Backward Compatibility**: Old saves work with new system
+- **Incremental Saves**: Only save changed data
+- **Compression**: Efficient storage of large manufacturing states
 
 ## Implementation Strategy
 
@@ -449,29 +620,27 @@ export const basicSidearmMethods = [
 - ✅ Three-tier manufacturing hierarchy prevents logical inconsistencies
 - ✅ Smart Manufacturing method available in UI for testing
 
-### Phase 2 Complete When:
-- Enhancement options appear based on available equipment
-- Enhancement costs and benefits calculate correctly
-- Enhanced products show appropriate market values
-- Job system handles enhancement selections
+### ✅ Phase 2 Complete When:
+- ✅ Enhancement options appear based on available equipment
+- ✅ Enhancement costs and benefits calculate correctly
+- ✅ Enhanced products show appropriate market values
+- ✅ Job system handles enhancement selections
 
 ### Phase 3 Complete When:
-- Special status tags trigger appropriate treatments
-- Treatment operations integrate smoothly into workflows
-- Equipment substitution provides viable alternatives
-- Risk factors are properly communicated to players
+- **Inventory-Driven Discovery**: System automatically detects valid operations for any item condition
+- **Two-Panel Interface**: Scalable product tree + intelligent workflow preview working smoothly
+- **Automatic Workflows**: Repair, disassembly, and treatment operations generate correctly
+- **Condition Handling**: [drenched], [corroded], [heat-damaged] trigger appropriate treatments automatically
+- **Batch Processing**: Multiple similar items can be processed efficiently together
+- **Performance**: Interface remains responsive with 100+ products and complex workflows
 
 ### Phase 4 Complete When:
-- Job planning interface is intuitive and responsive
-- Workflow visualization provides clear understanding
-- Real-time updates work smoothly during job execution
-- Enhanced job management improves player experience
-
-### Phase 5 Complete When:
-- Market integration supports enhanced products fully
-- Framework supports future R&D expansion
-- Performance meets all targets
-- System is ready for production release
+- **Market Integration**: Enhanced products integrate with contract and market systems
+- **Research Framework**: Product discovery and knowledge progression systems working
+- **Contract Intelligence**: System matches inventory to contract requirements automatically
+- **Technology Gates**: Advanced products properly locked behind research requirements
+- **Performance Optimization**: System scales to industrial complexity smoothly
+- **Save Compatibility**: All systems work with existing and future save formats
 
 ## Technical Notes
 

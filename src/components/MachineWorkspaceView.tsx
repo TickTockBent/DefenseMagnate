@@ -1,7 +1,7 @@
 // Machine Workspace View - Shows machines with job slots
 
 import { useGameStore } from '../state/gameStoreWithEquipment';
-import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility, ItemTag, ItemManufacturingType } from '../types';
+import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility, ItemTag, ItemManufacturingType, Enhancement, EnhancementSelection } from '../types';
 import { Equipment, EquipmentInstance } from '../types';
 import { formatGameTime } from '../utils/gameClock';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -9,6 +9,8 @@ import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturing
 import { inventoryManager } from '../utils/inventoryManager';
 import { getDisplayName, getQualityDescription } from '../utils/itemSystem';
 import { baseItems, getBaseItem } from '../data/baseItems';
+import { EnhancementManager } from '../systems/enhancementManager';
+import { EnhancementCalculator } from '../systems/enhancementCalculator';
 
 // Helper function to format product names for display
 function formatProductName(productId: string): string {
@@ -847,12 +849,27 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [showMethodDetails, setShowMethodDetails] = useState<string | null>(null);
   const [startingJob, setStartingJob] = useState<string | null>(null);
+  const [selectedEnhancements, setSelectedEnhancements] = useState<Map<string, Enhancement[]>>(new Map());
+  const [showEnhancementDetails, setShowEnhancementDetails] = useState<string | null>(null);
   const startMachineJob = useGameStore(state => state.startMachineJob);
   
   const handleStartJob = (facilityId: string, productId: string, methodId: string, quantity: number) => {
     // Show immediate feedback for just this method
     setStartingJob(methodId);
-    startMachineJob(facilityId, productId, methodId, quantity);
+    
+    // Get selected enhancements for this method
+    const enhancements = selectedEnhancements.get(methodId) || [];
+    const enhancementSelection: EnhancementSelection | undefined = enhancements.length > 0 ? {
+      jobId: `temp-${Date.now()}`, // Temporary ID, will be replaced when job is created
+      selectedEnhancements: enhancements,
+      totalTimeModifier: enhancements.reduce((acc, e) => acc * e.timeModifier, 1.0),
+      totalComplexityModifier: enhancements.reduce((acc, e) => acc * e.complexityModifier, 1.0),
+      totalQualityModifier: enhancements.reduce((acc, e) => acc + e.qualityModifier, 0),
+      additionalCosts: enhancements.flatMap(e => e.costs),
+      additionalTags: [...new Set(enhancements.flatMap(e => e.outputTags))]
+    } : undefined;
+    
+    startMachineJob(facilityId, productId, methodId, quantity, enhancementSelection);
     // Clear the feedback after a short delay
     setTimeout(() => setStartingJob(null), 300);
   };
@@ -1026,6 +1043,90 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                           <div className="text-gray-500 text-xs mt-1">
                             {method.operations.length} operations, ~{method.operations.reduce((sum, op) => sum + op.baseDurationMinutes, 0)} min
                           </div>
+                          
+                          {/* Enhancement Selection */}
+                          {(() => {
+                            const availableEnhancements = EnhancementManager.discoverAvailableEnhancements(facility);
+                            const methodEnhancements = selectedEnhancements.get(method.id) || [];
+                            
+                            if (availableEnhancements.length > 0) {
+                              return (
+                                <div className="mt-2 pt-2 border-t border-gray-700">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs text-blue-400">Enhancements:</span>
+                                    <button
+                                      onClick={() => setShowEnhancementDetails(showEnhancementDetails === method.id ? null : method.id)}
+                                      className="text-xs text-gray-400 hover:text-gray-300"
+                                    >
+                                      {methodEnhancements.length > 0 ? `${methodEnhancements.length} selected` : 'None'}
+                                    </button>
+                                  </div>
+                                  
+                                  {showEnhancementDetails === method.id && (
+                                    <div className="space-y-2">
+                                      <div className="space-y-1 max-h-24 overflow-y-auto">
+                                        {availableEnhancements.map((enhancement: Enhancement) => {
+                                          const isSelected = methodEnhancements.some(e => e.id === enhancement.id);
+                                          return (
+                                            <label key={enhancement.id} className="flex items-start space-x-2 text-xs cursor-pointer">
+                                              <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={(e) => {
+                                                  const newEnhancements = new Map(selectedEnhancements);
+                                                  const currentMethodEnhancements = newEnhancements.get(method.id) || [];
+                                                  
+                                                  if (e.target.checked) {
+                                                    newEnhancements.set(method.id, [...currentMethodEnhancements, enhancement]);
+                                                  } else {
+                                                    newEnhancements.set(method.id, currentMethodEnhancements.filter(e => e.id !== enhancement.id));
+                                                  }
+                                                  setSelectedEnhancements(newEnhancements);
+                                                }}
+                                                className="mt-0.5"
+                                              />
+                                              <div className="flex-1">
+                                                <div className="text-white">{enhancement.name}</div>
+                                                <div className="text-gray-400">{enhancement.description}</div>
+                                                <div className="text-gray-500">
+                                                  +{enhancement.qualityModifier}% quality, {enhancement.timeModifier}x time
+                                                </div>
+                                              </div>
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                      
+                                      {/* Enhancement Impact Preview */}
+                                      {methodEnhancements.length > 0 && (
+                                        <div className="pt-1 border-t border-gray-600">
+                                          <div className="text-xs text-blue-300 font-semibold mb-1">Enhancement Impact:</div>
+                                          {(() => {
+                                            const baseProductValue = 100; // Placeholder base value
+                                            const profitability = EnhancementCalculator.calculateEnhancementProfitability(methodEnhancements, baseProductValue, 1);
+                                            return (
+                                              <div className="text-xs space-y-1">
+                                                <div className="text-green-400">
+                                                  Market Value: +{((profitability.enhancedValue / profitability.baseValue - 1) * 100).toFixed(0)}%
+                                                </div>
+                                                <div className="text-yellow-400">
+                                                  Est. Costs: {profitability.totalCosts.toFixed(0)} credits
+                                                </div>
+                                                <div className={profitability.profitMargin > 15 ? 'text-green-400' : profitability.profitMargin > 5 ? 'text-yellow-400' : 'text-red-400'}>
+                                                  Profit Margin: {profitability.profitMargin.toFixed(1)}%
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                         <div className="flex gap-1 ml-2">
                           <button

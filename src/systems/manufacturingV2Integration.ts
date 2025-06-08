@@ -8,7 +8,9 @@ import {
   MachineBasedMethod,
   ItemInstance, 
   ItemTag,
-  TagCategory
+  TagCategory,
+  EnhancementSelection,
+  Facility
 } from '../types';
 
 export class ManufacturingV2Integration {
@@ -75,19 +77,24 @@ export class ManufacturingV2Integration {
   /**
    * Generate a dynamic manufacturing method for a product
    * This is the main entry point for the UI to use Manufacturing v2
+   * PHASE 2: Now supports enhancement selection
    */
   static generateDynamicMethod(
     targetProductId: string,
     targetQuantity: number = 1,
     inputItems: ItemInstance[] = [],
-    availableInventory: ItemInstance[] = []
+    availableInventory: ItemInstance[] = [],
+    enhancementSelection?: EnhancementSelection,
+    facility?: Facility
   ): MachineBasedMethod {
     try {
       const plan = WorkflowGenerator.generateManufacturingPlan(
         targetProductId,
         targetQuantity,
         inputItems,
-        availableInventory
+        availableInventory,
+        enhancementSelection,
+        facility
       );
       
       console.log(`Generated Manufacturing v2 plan for ${targetProductId}:`, {

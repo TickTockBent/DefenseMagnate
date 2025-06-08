@@ -10,24 +10,31 @@ import {
   ItemManufacturingType,
   ItemInstance, 
   ItemTag,
-  TagCategory
+  TagCategory,
+  Enhancement,
+  EnhancementSelection,
+  Facility
 } from '../types';
 import { getBaseItem } from '../data/baseItems';
 import { ManufacturingRulesEngine } from './manufacturingRules';
 import { ConditionAnalyzer } from './conditionAnalyzer';
 import { GapAnalyzer } from './gapAnalyzer';
+import { EnhancementManager } from './enhancementManager';
 
 export class WorkflowGenerator {
   private static operationIdCounter = 0;
   
   /**
    * Generate a complete manufacturing plan for a target product
+   * PHASE 2: Now supports enhancement-enhanced workflows
    */
   static generateManufacturingPlan(
     targetProductId: string,
     targetQuantity: number,
     inputItems: ItemInstance[],
-    availableInventory: ItemInstance[]
+    availableInventory: ItemInstance[],
+    enhancementSelection?: EnhancementSelection,
+    facility?: Facility
   ): ManufacturingPlan {
     console.log(`WorkflowGenerator: Starting plan generation for ${targetProductId} (quantity: ${targetQuantity})`);
     
@@ -53,10 +60,11 @@ export class WorkflowGenerator {
     console.log(`WorkflowGenerator: Generated ${requiredOperations.length} operations for gaps:`, 
       requiredOperations.map(op => op.name));
     
-    // Step 4: Add final assembly operation
+    // Step 4: Add final assembly operation (with enhancements if selected)
     const finalAssemblyOp = this.generateFinalAssemblyOperation(
       targetProductId,
-      targetQuantity
+      targetQuantity,
+      enhancementSelection
     );
     requiredOperations.push(finalAssemblyOp);
     console.log(`WorkflowGenerator: Added final assembly operation: ${finalAssemblyOp.name}`);
@@ -453,12 +461,70 @@ export class WorkflowGenerator {
   
   /**
    * Generate final assembly operation for the target product
+   * PHASE 2: Now applies enhancements to the final product
    */
   private static generateFinalAssemblyOperation(
     targetProductId: string,
-    quantity: number
+    quantity: number,
+    enhancementSelection?: EnhancementSelection
   ): DynamicOperation {
-    return this.createAssemblyOperation(targetProductId, quantity);
+    const baseOperation = this.createAssemblyOperation(targetProductId, quantity);
+    
+    if (enhancementSelection && enhancementSelection.selectedEnhancements.length > 0) {
+      return this.applyEnhancementsToOperation(baseOperation, enhancementSelection);
+    }
+    
+    return baseOperation;
+  }
+  
+  /**
+   * Apply enhancements to an operation (PHASE 2)
+   */
+  private static applyEnhancementsToOperation(
+    baseOperation: DynamicOperation,
+    enhancementSelection: EnhancementSelection
+  ): DynamicOperation {
+    console.log(`WorkflowGenerator: Applying ${enhancementSelection.selectedEnhancements.length} enhancements to ${baseOperation.name}`);
+    
+    const enhancedOperation: DynamicOperation = {
+      ...baseOperation,
+      id: `${baseOperation.id}_enhanced`,
+      name: `${baseOperation.name} [Enhanced]`,
+      description: `${baseOperation.description} with ${enhancementSelection.selectedEnhancements.map(e => e.name).join(', ')}`,
+      
+      // Apply time and complexity modifiers
+      baseDurationMinutes: Math.round(baseOperation.baseDurationMinutes * enhancementSelection.totalTimeModifier),
+      failure_chance: Math.min(0.5, (baseOperation.failure_chance || 0.02) * enhancementSelection.totalComplexityModifier),
+      
+      // Add enhancement costs as additional material requirements
+      materialConsumption: [
+        ...(baseOperation.materialConsumption || []),
+        ...enhancementSelection.additionalCosts
+          .filter(cost => cost.type === 'material')
+          .map(cost => ({
+            itemId: cost.itemId!,
+            count: cost.quantity
+          }))
+      ],
+      
+      // Enhanced material production with additional tags and quality
+      materialProduction: baseOperation.materialProduction?.map(production => ({
+        ...production,
+        quality: Math.min(100, (production.quality || 75) + enhancementSelection.totalQualityModifier),
+        tags: [
+          ...(production.tags || []),
+          ...enhancementSelection.additionalTags
+        ]
+      })) || [],
+      
+      // Mark as enhanced for tracking
+      generatedReason: `${baseOperation.generatedReason} - Enhanced with: ${enhancementSelection.selectedEnhancements.map(e => e.name).join(', ')}`
+    };
+    
+    console.log(`WorkflowGenerator: Enhanced operation duration: ${baseOperation.baseDurationMinutes}min → ${enhancedOperation.baseDurationMinutes}min`);
+    console.log(`WorkflowGenerator: Enhanced operation quality modifier: +${enhancementSelection.totalQualityModifier}`);
+    
+    return enhancedOperation;
   }
   
   /**

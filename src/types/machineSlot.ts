@@ -158,6 +158,9 @@ export interface MachineSlotJob {
   subOperations?: Map<number, JobSubOperation>; // Operation index -> sub-operation
   isManufacturingV2?: boolean; // True if this uses the v2 sub-operations system
   
+  // PHASE 2: Enhancement system
+  enhancementSelection?: import('./enhancement').EnhancementSelection;
+  
   // DEPRECATED: Parallel operation support (replaced by sub-operations)
   isParallelOperation?: boolean; // True if this job is a parallel sub-operation
   parentJobId?: string; // ID of parent job if this is a parallel operation

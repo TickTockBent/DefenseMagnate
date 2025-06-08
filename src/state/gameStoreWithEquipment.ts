@@ -161,6 +161,7 @@ interface GameState {
     productId: string,
     methodId: string,
     quantity: number,
+    enhancementSelection?: import('../types').EnhancementSelection,
     rushOrder?: boolean
   ) => void;
   cancelMachineJob: (facilityId: string, jobId: string) => boolean;
@@ -593,7 +594,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   */
   
   // New machine workspace system
-  startMachineJob: (facilityId, productId, methodId, quantity = 1, rushOrder = false) => {
+  startMachineJob: (facilityId, productId, methodId, quantity = 1, enhancementSelection, rushOrder = false) => {
     const state = get();
     const facility = state.facilities.find(f => f.id === facilityId);
     if (!facility) return;
@@ -624,7 +625,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       method,
       quantity,
       priority,
-      rushOrder
+      rushOrder,
+      enhancementSelection
     );
     
     // Single state update with the current workspace

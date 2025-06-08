@@ -157,6 +157,63 @@ export const tagEffects: Record<ItemTag, TagEffect> = {
     qualityMultiplier: 0.9,   // 10% quality penalty - basic technology
     valueMultiplier: 0.7,     // 30% value penalty - simple technology
     description: 'Basic technology level using conventional manufacturing methods'
+  },
+  
+  // Enhancement Tags (Manufacturing v2 Phase 2)
+  [ItemTag.REINFORCED]: {
+    tag: ItemTag.REINFORCED,
+    qualityMultiplier: 1.15,  // 15% quality bonus
+    valueMultiplier: 1.3,     // 30% value bonus
+    description: 'Reinforced construction for enhanced durability'
+  },
+  
+  [ItemTag.LIGHTWEIGHT]: {
+    tag: ItemTag.LIGHTWEIGHT,
+    qualityMultiplier: 1.05,  // 5% quality bonus
+    valueMultiplier: 1.25,    // 25% value bonus
+    description: 'Weight-optimized design without compromising strength'
+  },
+  
+  [ItemTag.POLISHED]: {
+    tag: ItemTag.POLISHED,
+    qualityMultiplier: 1.08,  // 8% quality bonus
+    valueMultiplier: 1.2,     // 20% value bonus
+    description: 'High-quality surface finish and appearance'
+  },
+  
+  [ItemTag.MODULAR]: {
+    tag: ItemTag.MODULAR,
+    qualityMultiplier: 1.0,   // Neutral quality
+    valueMultiplier: 1.4,     // 40% value bonus - utility value
+    description: 'Modular design for easy maintenance and upgrades'
+  },
+  
+  [ItemTag.FIELD_SERVICEABLE]: {
+    tag: ItemTag.FIELD_SERVICEABLE,
+    qualityMultiplier: 1.0,   // Neutral quality
+    valueMultiplier: 1.35,    // 35% value bonus - practical value
+    description: 'Designed for tool-free field maintenance'
+  },
+  
+  [ItemTag.COMPETITION_GRADE]: {
+    tag: ItemTag.COMPETITION_GRADE,
+    qualityMultiplier: 1.2,   // 20% quality bonus
+    valueMultiplier: 1.8,     // 80% value bonus
+    description: 'Tournament-grade precision and performance'
+  },
+  
+  [ItemTag.TACTICAL]: {
+    tag: ItemTag.TACTICAL,
+    qualityMultiplier: 1.12,  // 12% quality bonus
+    valueMultiplier: 1.5,     // 50% value bonus
+    description: 'Military/tactical configuration for operational use'
+  },
+  
+  [ItemTag.FIELD_READY]: {
+    tag: ItemTag.FIELD_READY,
+    qualityMultiplier: 1.08,  // 8% quality bonus
+    valueMultiplier: 1.3,     // 30% value bonus
+    description: 'Ready for immediate field deployment'
   }
 };
 

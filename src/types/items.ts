@@ -33,6 +33,16 @@ export enum ItemTag {
   CASING = 'casing',            // External housing/protection
   LOW_TECH = 'low-tech',        // Basic technology level
   
+  // Enhancement Tags (Manufacturing v2 Phase 2)
+  REINFORCED = 'reinforced',     // Additional material reinforcement
+  LIGHTWEIGHT = 'lightweight',   // Weight-optimized design
+  POLISHED = 'polished',        // High-quality surface finish
+  MODULAR = 'modular',          // Designed for easy maintenance/upgrades
+  FIELD_SERVICEABLE = 'field_serviceable', // Tool-free maintenance
+  COMPETITION_GRADE = 'competition_grade', // Tournament-grade precision
+  TACTICAL = 'tactical',        // Military/tactical configuration
+  FIELD_READY = 'field_ready',  // Ready for field deployment
+  
   // Special Tags
   PROTOTYPE = 'prototype',       // Experimental items with unique properties
   CUSTOM = 'custom',            // Player-customized items

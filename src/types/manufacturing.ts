@@ -122,7 +122,7 @@ export interface ManufacturingPlan {
   requiredOperations: DynamicOperation[];
   estimatedDuration: number; // total time in game hours
   materialRequirements: MaterialRequirement[];
-  enhancementOptions?: Enhancement[]; // Available enhancements for this plan
+  enhancementOptions?: import('./enhancement').Enhancement[]; // Available enhancements for this plan
   
   // Planning metadata
   planningTime: number; // When this plan was generated
@@ -130,34 +130,8 @@ export interface ManufacturingPlan {
   confidence: number; // 0-1 confidence in this plan
 }
 
-// Enhancement system (Phase 2)
-export interface Enhancement {
-  id: string;
-  name: string;
-  description: string;
-  category: 'performance' | 'aesthetic' | 'functional';
-  requirements: EnhancementRequirement[];
-  effects: EnhancementEffect[];
-  costs: EnhancementCost[];
-}
-
-export interface EnhancementRequirement {
-  type: 'equipment' | 'skill' | 'research' | 'material';
-  id: string;
-  level?: number;
-}
-
-export interface EnhancementEffect {
-  property: string;
-  modifier: number;
-  description: string;
-}
-
-export interface EnhancementCost {
-  type: 'time' | 'material' | 'energy';
-  amount: number;
-  resourceId?: string;
-}
+// DEPRECATED: Enhancement types moved to enhancement.ts (Manufacturing v2 Phase 2)
+// These are kept for temporary compatibility only
 
 // Material requirement for a manufacturing step
 export interface MaterialRequirement {
