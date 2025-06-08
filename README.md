@@ -5,14 +5,56 @@ A real-time arms manufacturing management game built with React, TypeScript, and
 ## 🎮 Game Overview
 
 Defense Magnate is a browser-based management simulation where you:
-- **Manufacture weapons and components** using realistic machine workspace systems
-- **Manage real-time production** with 1 minute = 1 game hour time scale  
+- **Manufacture weapons and components** using realistic machine workspace systems with component-based workflows
+- **Manage real-time production** with 1 minute = 1 game hour time scale and live progress tracking
 - **Optimize machine utilization** with facility-wide job queues and dynamic assignment
+- **Control production pipelines** with job cancellation and material recovery at any stage
+- **Disassemble and recover materials** from finished products and damaged items for reuse
 - **Source materials** from dynamic markets with procedural suppliers
 - **Fulfill contracts** with quality requirements and deadline pressure
-- **Build your business** through the complete acquire-manufacture-sell cycle
+- **Build your business** through the complete acquire-manufacture-sell-disassemble cycle
 
 ## 🔧 Recent Updates
+
+### 📋 **Patch Notes v1.4 - Disassembly v1 Arc (January 2025)** 🔧
+
+This major update introduces component-based manufacturing with intermediate product tracking, job cancellation with material recovery, and disassembly operations.
+
+#### **🔄 Component-Based Manufacturing System**
+- **🏗️ Job Sub-Inventories**: Each job now tracks materials and intermediate products separately
+- **⚙️ Material Transformation**: Operations consume materials and produce specific components with tags
+- **📊 Transparent Workflows**: See exactly what materials and components each operation uses/produces
+- **🔗 Component Chaining**: Complex products built through multi-stage component transformation
+- **🎯 Quality Inheritance**: Components inherit and modify quality from source materials
+
+#### **❌ Advanced Job Cancellation**
+- **🔧 Mid-Stage Recovery**: Cancel jobs at any point and recover all materials and intermediate products
+- **💰 Partial Completion**: Keep components created by completed operations when cancelling
+- **📦 Inventory Return**: All job sub-inventory materials automatically returned to facility
+- **⚠️ Smart UI**: Cancel confirmation shows progress and recovery preview
+- **🎮 Player Control**: Full control over production pipeline with minimal material loss
+
+#### **♻️ Disassembly Operations**
+- **🔨 Pristine Disassembly**: Carefully disassemble functional weapons to recover high-quality components
+- **⚡ Damaged Salvage**: Force disassembly of damaged items to extract usable materials
+- **🎯 Component Recovery**: Get plastic casings, mechanical assemblies, and material scraps
+- **⚙️ Reverse Engineering**: Use recovered components in new manufacturing workflows
+- **📊 Quality Preservation**: Component quality reflects source item condition
+
+#### **🎨 Enhanced Job Management UI**
+- **📋 Unified Job List**: Merged separate job queue and active job displays into single, comprehensive view
+- **📊 Persistent Expansion**: Job details stay expanded when switching between queued/active/completed states
+- **⏱️ Real-Time Progress**: In-progress jobs show current operation with live percentage (e.g., "Current: Rough Milling (67%)")
+- **✅ Completed Job Lingering**: Finished jobs show "COMPLETED" status for 5 seconds before auto-dismissing
+- **🎯 Status-Based Organization**: Color-coded job states (blue=queued, yellow=active, green=completed)
+- **🔧 Smart Cancellation**: Context-aware cancel buttons only appear for cancellable jobs
+
+#### **⚡ Performance & UX Improvements**
+- **🚀 Fixed Progress Bar Interpolation**: Eliminated jumping/snapping at high game speeds
+- **🔄 Stable Job State Management**: Jobs no longer flicker between lists during state transitions
+- **🧹 Legacy UI Cleanup**: Removed empty resource displays and unused components
+- **⏰ Improved Timing System**: Better synchronization between game time and real-time updates
+- **🎮 Responsive Controls**: More intuitive job monitoring and control interface
 
 ### 📋 **Patch Notes v1.3 - Optimization & Cleanup Arc (January 2025)** ⚡
 
