@@ -175,8 +175,10 @@ export class WorkflowGenerator {
           }
         }
         
-        // Then generate shaping operation from source material
-        operations.push(this.createShapingOperation(componentType, quantity));
+        // Then generate individual shaping operations (one per component for parallel execution)
+        for (let i = 0; i < quantity; i++) {
+          operations.push(this.createShapingOperation(componentType, 1));
+        }
         break;
         
       case ItemManufacturingType.ASSEMBLY:
@@ -260,19 +262,22 @@ export class WorkflowGenerator {
       }
     }
     
-    // Then create tag-specific shaping operation
-    const shapingOp = this.createTagSpecificShapingOperation(componentType, quantity, requiredTags);
-    operations.push(shapingOp);
+    // Then create individual tag-specific shaping operations (one per component for parallel execution)
+    for (let i = 0; i < quantity; i++) {
+      const shapingOp = this.createTagSpecificShapingOperation(componentType, 1, requiredTags);
+      operations.push(shapingOp);
+    }
     
     return operations;
   }
   
   /**
    * Create a shaping operation that outputs components with specific tags
+   * Now creates individual operations for parallel execution
    */
   private static createTagSpecificShapingOperation(
     componentType: string,
-    quantity: number,
+    quantity: number = 1,
     requiredTags: ItemTag[]
   ): DynamicOperation {
     const baseItem = getBaseItem(componentType);
@@ -288,25 +293,25 @@ export class WorkflowGenerator {
     
     return {
       id: `shaping_${this.operationIdCounter++}_${componentType}_${requiredTags.join('_')}`,
-      name: `${shapingMethods.name} (${requiredTags.join(', ')})`,
-      description: `${shapingMethods.description} with ${requiredTags.join(', ')} tags`,
+      name: `${shapingMethods.name} (${requiredTags.join(', ')}) (1x)`,
+      description: `${shapingMethods.description} with ${requiredTags.join(', ')} tags to create 1 ${componentType}`,
       operationType: OperationType.SHAPING,
       requiredTag: shapingMethods.requiredTag,
-      baseDurationMinutes: shapingMethods.baseDuration * quantity,
+      baseDurationMinutes: shapingMethods.baseDuration, // No quantity multiplier - always single unit
       materialConsumption: [{
         itemId: sourceMaterial,
-        count: quantity * shapingMethods.materialRatio
+        count: shapingMethods.materialRatio // Single unit consumption
       }],
       materialProduction: [{
         itemId: componentType,
-        count: quantity,
+        count: 1, // Always produce exactly 1
         quality: shapingMethods.outputQuality,
         tags: requiredTags.length > 0 ? requiredTags : shapingMethods.outputTags
       }],
       can_fail: true,
       failure_chance: shapingMethods.failureChance,
       labor_skill: shapingMethods.laborSkill,
-      generatedReason: `Manufacturing ${quantity} ${componentType} with ${requiredTags.join(', ')} tags from ${sourceMaterial}`,
+      generatedReason: `Manufacturing 1 ${componentType} with ${requiredTags.join(', ')} tags from ${sourceMaterial}`,
       isConditional: false
     };
   }
@@ -374,8 +379,9 @@ export class WorkflowGenerator {
   
   /**
    * Create a shaping operation (raw material → shaped material)
+   * Now creates individual operations for parallel execution
    */
-  private static createShapingOperation(componentType: string, quantity: number): DynamicOperation {
+  private static createShapingOperation(componentType: string, quantity: number = 1): DynamicOperation {
     const baseItem = getBaseItem(componentType);
     const sourceMaterial = baseItem?.materialSource || 'steel';
     
@@ -383,25 +389,25 @@ export class WorkflowGenerator {
     
     return {
       id: `shaping_${this.operationIdCounter++}_${componentType}`,
-      name: shapingMethods.name,
-      description: `${shapingMethods.description} to create ${componentType}`,
+      name: `${shapingMethods.name} (1x)`,
+      description: `${shapingMethods.description} to create 1 ${componentType}`,
       operationType: OperationType.SHAPING,
       requiredTag: shapingMethods.requiredTag,
-      baseDurationMinutes: shapingMethods.baseDuration * quantity,
+      baseDurationMinutes: shapingMethods.baseDuration, // No quantity multiplier - always single unit
       materialConsumption: [{
         itemId: sourceMaterial,
-        count: quantity * shapingMethods.materialRatio
+        count: shapingMethods.materialRatio // Single unit consumption
       }],
       materialProduction: [{
         itemId: componentType,
-        count: quantity,
+        count: 1, // Always produce exactly 1
         quality: shapingMethods.outputQuality,
         tags: shapingMethods.outputTags
       }],
       can_fail: true,
       failure_chance: shapingMethods.failureChance,
       labor_skill: shapingMethods.laborSkill,
-      generatedReason: `Manufacturing ${quantity} ${componentType} from ${sourceMaterial}`,
+      generatedReason: `Manufacturing 1 ${componentType} from ${sourceMaterial}`,
       isConditional: false
     };
   }

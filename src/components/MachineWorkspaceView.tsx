@@ -454,14 +454,55 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
   const combinedJobs = [...activeJobs, ...queuedJobs, ...recentCompletedJobs]
     .filter((job): job is MachineSlotJob => job !== null && job !== undefined);
   
-  // No need for complex timer logic - just use the filtered list
+  // MANUFACTURING V2: Filter to show only parent jobs, not sub-operations
   const visibleJobs = combinedJobs.filter(job => {
     // Double-check job is defined
     if (!job || !job.id) {
       return false;
     }
+    // Hide sub-operations (they have _subop_ in their ID)
+    if (job.id.includes('_subop_')) {
+      return false;
+    }
     return true;
   });
+  
+  // MANUFACTURING V2: Helper to get sub-operation progress for v2 jobs
+  const getSubOperationProgress = (job: MachineSlotJob) => {
+    if (!job.isManufacturingV2 || !job.subOperations) {
+      return null;
+    }
+    
+    const subOps = Array.from(job.subOperations.values());
+    const completed = subOps.filter(sub => sub.state === 'completed').length;
+    const inProgress = subOps.filter(sub => sub.state === 'in_progress').length;
+    const queued = subOps.filter(sub => sub.state === 'queued').length;
+    const pending = subOps.filter(sub => sub.state === 'pending').length;
+    
+    // Group by operation type for better display
+    const operationGroups = new Map<string, Array<{subOp: any, status: string}>>();
+    
+    subOps.forEach(subOp => {
+      const opName = subOp.operation.name.replace(' (1x)', ''); // Remove (1x) suffix for grouping
+      if (!operationGroups.has(opName)) {
+        operationGroups.set(opName, []);
+      }
+      operationGroups.get(opName)!.push({
+        subOp,
+        status: subOp.state
+      });
+    });
+    
+    return {
+      total: subOps.length,
+      completed,
+      inProgress,
+      queued,
+      pending,
+      percentage: Math.round((completed / subOps.length) * 100),
+      operationGroups
+    };
+  };
   
   const handleCancelJob = (jobId: string, facilityId: string) => {
     cancelMachineJob(facilityId, jobId);
@@ -560,23 +601,51 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
                         )}
                       </div>
                       
-                      {job.state === 'queued' && (
-                        <div className="text-xs text-gray-400 mt-1">
-                          Next: {job.method.operations[job.currentOperationIndex]?.name}
-                        </div>
-                      )}
-                      
-                      {job.state === 'in_progress' && (() => {
-                        const progress = getJobProgress(job);
-                        return progress ? (
-                          <div className="text-xs text-yellow-300 mt-1">
-                            Current: {progress.currentOperation} ({progress.percentage}%)
-                          </div>
-                        ) : (
-                          <div className="text-xs text-yellow-300 mt-1">
-                            Current: {job.method.operations[job.currentOperationIndex]?.name || 'Processing...'}
-                          </div>
-                        );
+                      {/* MANUFACTURING V2: Enhanced status display */}
+                      {(() => {
+                        const v2Progress = getSubOperationProgress(job);
+                        
+                        if (v2Progress) {
+                          // Manufacturing v2 job - show sub-operation progress
+                          return (
+                            <div className="text-xs mt-1">
+                              <div className="text-teal-300">
+                                Progress: {v2Progress.completed}/{v2Progress.total} operations ({v2Progress.percentage}%)
+                              </div>
+                              {v2Progress.inProgress > 0 && (
+                                <div className="text-yellow-300">
+                                  Active: {v2Progress.inProgress} operations
+                                </div>
+                              )}
+                              {v2Progress.queued > 0 && (
+                                <div className="text-blue-300">
+                                  Queued: {v2Progress.queued} operations ready
+                                </div>
+                              )}
+                            </div>
+                          );
+                        } else {
+                          // Legacy job - show traditional status
+                          if (job.state === 'queued') {
+                            return (
+                              <div className="text-xs text-gray-400 mt-1">
+                                Next: {job.method.operations[job.currentOperationIndex]?.name}
+                              </div>
+                            );
+                          } else if (job.state === 'in_progress') {
+                            const progress = getJobProgress(job);
+                            return progress ? (
+                              <div className="text-xs text-yellow-300 mt-1">
+                                Current: {progress.currentOperation} ({progress.percentage}%)
+                              </div>
+                            ) : (
+                              <div className="text-xs text-yellow-300 mt-1">
+                                Current: {job.method.operations[job.currentOperationIndex]?.name || 'Processing...'}
+                              </div>
+                            );
+                          }
+                          return null;
+                        }
                       })()}
                     </div>
                     
@@ -624,41 +693,140 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
                   {/* Expanded job details */}
                   {isExpanded && (
                     <div className="mt-2 ml-4 space-y-2">
-                      {/* Operation progress */}
-                      <div className="flex flex-wrap gap-1 text-xs">
-                        {job.method.operations.map((op, idx) => {
-                          const isComplete = job.completedOperations.includes(op.id);
-                          const isCurrent = idx === job.currentOperationIndex;
-                          const isPending = idx > job.currentOperationIndex;
-                          
-                          let statusClass = 'text-gray-600';
-                          let statusSymbol = '○';
-                          
-                          if (isComplete) {
-                            statusClass = 'text-green-400';
-                            statusSymbol = '✓';
-                          } else if (isCurrent) {
-                            statusClass = 'text-yellow-400';
-                            statusSymbol = '◐';
-                          } else if (isPending) {
-                            statusClass = 'text-gray-500';
-                            statusSymbol = '○';
-                          }
-                          
+                      {(() => {
+                        const v2Progress = getSubOperationProgress(job);
+                        
+                        if (v2Progress) {
+                          // MANUFACTURING V2: Hierarchical sub-operation display
                           return (
-                            <div key={op.id} className={`${statusClass} flex items-center`}>
-                              <span>{statusSymbol}</span>
-                              <span className="ml-1">{op.name}</span>
+                            <div className="space-y-3">
+                              {/* Completed Operations */}
+                              {v2Progress.completed > 0 && (
+                                <div>
+                                  <div className="text-green-400 text-xs font-semibold mb-1">
+                                    ✓ Completed ({v2Progress.completed})
+                                  </div>
+                                  <div className="ml-2 space-y-1">
+                                    {Array.from(v2Progress.operationGroups.entries())
+                                      .filter(([_, ops]) => ops.some(op => op.status === 'completed'))
+                                      .map(([opName, ops]) => {
+                                        const completedOps = ops.filter(op => op.status === 'completed');
+                                        return (
+                                          <div key={`completed-${opName}`} className="text-xs text-green-300">
+                                            ✓ {opName} ({completedOps.length})
+                                          </div>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* In Progress Operations */}
+                              {v2Progress.inProgress > 0 && (
+                                <div>
+                                  <div className="text-yellow-400 text-xs font-semibold mb-1">
+                                    ◐ In Progress ({v2Progress.inProgress})
+                                  </div>
+                                  <div className="ml-2 space-y-1">
+                                    {Array.from(v2Progress.operationGroups.entries())
+                                      .filter(([_, ops]) => ops.some(op => op.status === 'in_progress'))
+                                      .map(([opName, ops]) => {
+                                        const inProgressOps = ops.filter(op => op.status === 'in_progress');
+                                        return (
+                                          <div key={`progress-${opName}`} className="text-xs text-yellow-300">
+                                            ◐ {opName} ({inProgressOps.length})
+                                          </div>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Queued Operations */}
+                              {v2Progress.queued > 0 && (
+                                <div>
+                                  <div className="text-blue-400 text-xs font-semibold mb-1">
+                                    ● Queued ({v2Progress.queued})
+                                  </div>
+                                  <div className="ml-2 space-y-1">
+                                    {Array.from(v2Progress.operationGroups.entries())
+                                      .filter(([_, ops]) => ops.some(op => op.status === 'queued'))
+                                      .map(([opName, ops]) => {
+                                        const queuedOps = ops.filter(op => op.status === 'queued');
+                                        return (
+                                          <div key={`queued-${opName}`} className="text-xs text-blue-300">
+                                            ● {opName} ({queuedOps.length}) - Ready
+                                          </div>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Pending Operations */}
+                              {v2Progress.pending > 0 && (
+                                <div>
+                                  <div className="text-gray-400 text-xs font-semibold mb-1">
+                                    ○ Pending ({v2Progress.pending})
+                                  </div>
+                                  <div className="ml-2 space-y-1">
+                                    {Array.from(v2Progress.operationGroups.entries())
+                                      .filter(([_, ops]) => ops.some(op => op.status === 'pending'))
+                                      .map(([opName, ops]) => {
+                                        const pendingOps = ops.filter(op => op.status === 'pending');
+                                        return (
+                                          <div key={`pending-${opName}`} className="text-xs text-gray-500">
+                                            ○ {opName} ({pendingOps.length}) - Waiting
+                                          </div>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
-                        })}
-                      </div>
-                      
-                      {/* Job Inventory Display */}
-                      {job.state === 'in_progress' && <JobInventoryDisplay job={job} />}
-                      
-                      {/* Operation Flow Display */}
-                      {job.state === 'in_progress' && <OperationFlowDisplay job={job} />}
+                        } else {
+                          // LEGACY: Traditional operation display
+                          return (
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap gap-1 text-xs">
+                                {job.method.operations.map((op, idx) => {
+                                  const isComplete = job.completedOperations.includes(op.id);
+                                  const isCurrent = idx === job.currentOperationIndex;
+                                  const isPending = idx > job.currentOperationIndex;
+                                  
+                                  let statusClass = 'text-gray-600';
+                                  let statusSymbol = '○';
+                                  
+                                  if (isComplete) {
+                                    statusClass = 'text-green-400';
+                                    statusSymbol = '✓';
+                                  } else if (isCurrent) {
+                                    statusClass = 'text-yellow-400';
+                                    statusSymbol = '◐';
+                                  } else if (isPending) {
+                                    statusClass = 'text-gray-500';
+                                    statusSymbol = '○';
+                                  }
+                                  
+                                  return (
+                                    <div key={op.id} className={`${statusClass} flex items-center`}>
+                                      <span>{statusSymbol}</span>
+                                      <span className="ml-1">{op.name}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              
+                              {/* Job Inventory Display */}
+                              {job.state === 'in_progress' && <JobInventoryDisplay job={job} />}
+                              
+                              {/* Operation Flow Display */}
+                              {job.state === 'in_progress' && <OperationFlowDisplay job={job} />}
+                            </div>
+                          );
+                        }
+                      })()}
                     </div>
                   )}
                 </div>
