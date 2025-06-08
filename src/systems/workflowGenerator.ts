@@ -7,10 +7,11 @@ import {
   ConditionAnalysis,
   ComponentGap,
   OperationType,
-  ItemManufacturingType
+  ItemManufacturingType,
+  ItemInstance, 
+  ItemTag,
+  TagCategory
 } from '../types';
-import { ItemInstance, ItemTag } from '../types';
-import { TagCategory, LaborSkill } from '../constants/enums';
 import { getBaseItem } from '../data/baseItems';
 import { ManufacturingRulesEngine } from './manufacturingRules';
 import { ConditionAnalyzer } from './conditionAnalyzer';
@@ -184,7 +185,7 @@ export class WorkflowGenerator {
       baseDurationMinutes: treatment.estimatedTime * 60, // Convert hours to minutes
       can_fail: true,
       failure_chance: 1 - treatment.successProbability,
-      labor_skill: LaborSkill.SKILLED_TECHNICIAN,
+      labor_skill: 'skilled_technician',
       generatedReason: `Treatment required for ${analysis.condition.join(', ')} condition`,
       isConditional: true
     };
@@ -220,7 +221,7 @@ export class WorkflowGenerator {
       })),
       can_fail: analysis.risks.some(risk => risk.impact === 'component_loss'),
       failure_chance: this.calculateDisassemblyFailureChance(analysis),
-      labor_skill: LaborSkill.SKILLED_TECHNICIAN,
+      labor_skill: 'skilled_technician',
       generatedReason: `Disassembly to recover components from ${analysis.condition.join(', ')} ${itemName}`,
       isConditional: false
     };
@@ -294,7 +295,7 @@ export class WorkflowGenerator {
       }],
       can_fail: true,
       failure_chance: 0.02, // 2% base failure rate for assembly
-      labor_skill: LaborSkill.SKILLED_TECHNICIAN,
+      labor_skill: 'skilled_technician',
       generatedReason: `Assembly of ${quantity} ${componentType} from components`,
       isConditional: false
     };
@@ -324,7 +325,7 @@ export class WorkflowGenerator {
         outputQuality: 75,
         outputTags: [ItemTag.ROUGH, ItemTag.LOW_TECH],
         failureChance: 0.05,
-        laborSkill: LaborSkill.SKILLED_MACHINIST
+        laborSkill: 'skilled_machinist'
       },
       'plastic-casing': {
         name: 'Shape Casing',
@@ -335,7 +336,7 @@ export class WorkflowGenerator {
         outputQuality: 80,
         outputTags: [ItemTag.CASING, ItemTag.LOW_TECH],
         failureChance: 0.02,
-        laborSkill: LaborSkill.SKILLED_TECHNICIAN
+        laborSkill: 'skilled_technician'
       }
     };
     
@@ -348,7 +349,7 @@ export class WorkflowGenerator {
       outputQuality: 70,
       outputTags: [ItemTag.STANDARD],
       failureChance: 0.03,
-      laborSkill: LaborSkill.SKILLED_TECHNICIAN
+      laborSkill: 'skilled_technician'
     };
   }
   

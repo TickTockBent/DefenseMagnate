@@ -2,9 +2,14 @@
 // Direct integration of Manufacturing v2 with machine workspace system
 
 import { WorkflowGenerator } from './workflowGenerator';
-import { ManufacturingPlan, DynamicOperation, MachineBasedMethod } from '../types';
-import { ItemInstance, ItemTag } from '../types';
-import { TagCategory, LaborSkill } from '../constants/enums';
+import { 
+  ManufacturingPlan, 
+  DynamicOperation, 
+  MachineBasedMethod,
+  ItemInstance, 
+  ItemTag,
+  TagCategory
+} from '../types';
 
 export class ManufacturingV2Integration {
   /**
@@ -170,7 +175,7 @@ export class ManufacturingV2Integration {
         baseDurationMinutes: 5, // Just for analysis
         can_fail: false,
         failure_chance: 0,
-        labor_skill: LaborSkill.UNSKILLED
+        labor_skill: 'unskilled'
       }],
       
       output_state: 'functional',
