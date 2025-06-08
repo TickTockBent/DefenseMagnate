@@ -7,6 +7,8 @@ import { formatGameTime } from '../utils/gameClock';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
 import { inventoryManager } from '../utils/inventoryManager';
+import { getDisplayName, getQualityDescription } from '../utils/itemSystem';
+import { baseItems } from '../data/baseItems';
 
 // Helper function to format product names for display
 function formatProductName(productId: string): string {
@@ -60,6 +62,8 @@ function MachineCard({ equipment, definition, slot, currentTime }: MachineCardPr
   const [realTimeRemaining, setRealTimeRemaining] = useState('N/A');
   const animationFrameRef = useRef<number | null>(null);
   const gameTime = useGameStore((state) => state.gameTime);
+  const prevGameSpeedRef = useRef(gameTime.gameSpeed);
+  const speedChangeTimeRef = useRef<number | null>(null);
   
   const getProgressBar = (progress: number) => {
     const filled = Math.floor(progress * 10);
@@ -94,15 +98,29 @@ function MachineCard({ equipment, definition, slot, currentTime }: MachineCardPr
       return;
     }
     
-    // Calculate real-time progress using actual time passage
-    // NOTE: 1 game hour = 60 seconds real time at 1x speed, adjusted by gameSpeed
-    const msPerGameHour = 60000; // Base: 1 game hour = 60 seconds real time
-    const lastUpdateTime = slot.currentProgress.lastUpdateTime || realTimeMs;
+    // Detect speed changes and reset interpolation baseline
+    if (prevGameSpeedRef.current !== gameSpeed) {
+      prevGameSpeedRef.current = gameSpeed;
+      speedChangeTimeRef.current = realTimeMs;
+    }
     
-    // Calculate how much game time has passed since the last store update
-    // The store's currentTime is already speed-adjusted, so we need to match that rate
+    // Calculate real-time progress using actual time passage
+    // Base rate: 1 game hour = 60 seconds real time (60000ms)
+    const msPerGameHour = 60000;
+    let lastUpdateTime = slot.currentProgress.lastUpdateTime || realTimeMs;
+    
+    // If speed changed recently, use the speed change time as baseline to avoid jumps
+    if (speedChangeTimeRef.current && speedChangeTimeRef.current > lastUpdateTime) {
+      lastUpdateTime = speedChangeTimeRef.current;
+    }
+    
+    // Calculate how much real time has passed since the last valid update
     const realTimeSinceUpdate = realTimeMs - lastUpdateTime;
-    const gameTimeSinceUpdate = (realTimeSinceUpdate / msPerGameHour) * gameSpeed;
+    
+    // Convert to game time progression at current speed
+    // At 2x speed: 1000ms real time = 2000ms worth of game progression
+    const gameProgressionMs = realTimeSinceUpdate * gameSpeed;
+    const gameTimeSinceUpdate = gameProgressionMs / msPerGameHour;
     
     // Add interpolated time to the store's current time
     const interpolatedCurrentTime = currentTime + gameTimeSinceUpdate;
@@ -191,6 +209,129 @@ function MachineCard({ equipment, definition, slot, currentTime }: MachineCardPr
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// Component to display job inventory contents
+function JobInventoryDisplay({ job }: { job: MachineSlotJob }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  if (!job.jobInventory) {
+    return <div className="text-xs text-gray-500">No job inventory</div>;
+  }
+  
+  // Count total items in job inventory
+  let totalItems = 0;
+  const inventoryItems: Array<{ baseItemId: string; name: string; quantity: number; quality: number; tags: string[] }> = [];
+  
+  for (const group of job.jobInventory.groups.values()) {
+    for (const slot of group.slots) {
+      for (const instance of slot.stack.instances) {
+        totalItems += instance.quantity;
+        const baseItem = baseItems[instance.baseItemId];
+        if (baseItem) {
+          inventoryItems.push({
+            baseItemId: instance.baseItemId,
+            name: baseItem.name,
+            quantity: instance.quantity,
+            quality: instance.quality,
+            tags: instance.tags
+          });
+        }
+      }
+    }
+  }
+  
+  if (totalItems === 0) {
+    return <div className="text-xs text-gray-500">Job inventory empty</div>;
+  }
+  
+  return (
+    <div className="mt-2">
+      <div 
+        className="text-xs text-blue-300 cursor-pointer hover:text-blue-200"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        {isExpanded ? '▼' : '►'} Job Inventory ({totalItems} items)
+      </div>
+      
+      {isExpanded && (
+        <div className="ml-3 mt-1 space-y-1">
+          {inventoryItems.map((item, idx) => (
+            <div key={idx} className="text-xs text-gray-400">
+              • {item.quantity}x {getDisplayName({ baseItemId: item.baseItemId, tags: item.tags, quality: item.quality } as any)}
+              <span className="text-gray-600 ml-1">
+                ({getQualityDescription(item.quality)})
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Component to show what upcoming operations will do
+function OperationFlowDisplay({ job }: { job: MachineSlotJob }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  const upcomingOperations = job.method.operations.slice(job.currentOperationIndex + 1);
+  
+  if (upcomingOperations.length === 0) {
+    return null;
+  }
+  
+  return (
+    <div className="mt-2">
+      <div 
+        className="text-xs text-green-300 cursor-pointer hover:text-green-200"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        {isExpanded ? '▼' : '►'} Upcoming Operations ({upcomingOperations.length})
+      </div>
+      
+      {isExpanded && (
+        <div className="ml-3 mt-1 space-y-2">
+          {upcomingOperations.map((op, idx) => (
+            <div key={op.id} className="text-xs border-l-2 border-gray-600 pl-2">
+              <div className="text-yellow-300 font-semibold">
+                {job.currentOperationIndex + idx + 2}. {op.name}
+              </div>
+              
+              {/* Show material transformations for component-based methods */}
+              {op.materialConsumption && op.materialConsumption.length > 0 && (
+                <div className="text-red-300 text-xs">
+                  Consumes: {op.materialConsumption.map(mc => 
+                    `${mc.count} ${mc.itemId.replace(/-/g, ' ')}${mc.tags ? ` [${mc.tags.join(', ')}]` : ''}`
+                  ).join(', ')}
+                </div>
+              )}
+              
+              {op.materialProduction && op.materialProduction.length > 0 && (
+                <div className="text-green-300 text-xs">
+                  Produces: {op.materialProduction.map(mp => 
+                    `${mp.count} ${mp.itemId.replace(/-/g, ' ')}${mp.tags ? ` [${mp.tags.join(', ')}]` : ''}`
+                  ).join(', ')}
+                </div>
+              )}
+              
+              {/* Legacy material requirements */}
+              {op.material_requirements && op.material_requirements.length > 0 && (
+                <div className="text-gray-400 text-xs">
+                  Materials: {op.material_requirements.map(req => 
+                    `${req.quantity} ${req.material_id}${req.required_tags ? ` [${req.required_tags.join(', ')}]` : ''}`
+                  ).join(', ')}
+                </div>
+              )}
+              
+              {!op.materialConsumption && !op.materialProduction && !op.material_requirements && (
+                <div className="text-gray-500 text-xs">Processing step</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -291,6 +432,12 @@ function JobFlowDisplay({ jobs }: JobFlowDisplayProps) {
                 );
               })}
             </div>
+            
+            {/* Job Inventory Display */}
+            <JobInventoryDisplay job={job} />
+            
+            {/* Operation Flow Display */}
+            <OperationFlowDisplay job={job} />
           </div>
         ))
       )}

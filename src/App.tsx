@@ -13,16 +13,18 @@ function App() {
   const setGameSpeed = useGameStore((state) => state.setGameSpeed)
   const updateProduction = useGameStore((state) => state.updateProduction)
   
-  // Global game clock - runs every second, but game speed affects time passage
+  // Global game clock - runs frequently for smooth updates, especially at high speeds
   useEffect(() => {
+    // Update frequency based on game speed for smoother interpolation
+    const updateInterval = Math.max(100, 1000 / gameTime.gameSpeed); // Faster updates at higher speeds
+    
     const interval = setInterval(() => {
       if (!gameTime.isPaused) {
-        // Apply game speed multiplier to time passage
-        const effectiveMs = 1000 * gameTime.gameSpeed;
-        updateGameTime(effectiveMs) // Game time elapsed based on speed
+        // Pass the actual interval time
+        updateGameTime(updateInterval) 
         updateProduction() // Update production systems
       }
-    }, 1000)
+    }, updateInterval)
     
     return () => clearInterval(interval)
   }, [updateGameTime, updateProduction, gameTime.isPaused, gameTime.gameSpeed])
