@@ -1248,3 +1248,31 @@ useGameStore.setState({
     nextRefreshAt: 48 // Next refresh in 48 hours
   }
 });
+
+// Set up job completion callback on the store's machine workspace manager
+useGameStore.getState().machineWorkspaceManager.setJobCompleteCallback((job) => {
+  const store = useGameStore.getState();
+  store.addJobCompletionNotification({
+    jobId: job.id,
+    productId: job.productId,
+    methodName: job.method.name,
+    quantity: job.quantity
+  });
+  
+  // Force a complete state update to refresh the UI with completed items
+  // This ensures the facility inventory changes are reflected in the UI
+  if (store.selectedFacilityId) {
+    const updatedFacility = store.facilities.find(f => f.id === store.selectedFacilityId);
+    if (updatedFacility) {
+      // Update the machine workspace manager with the current facility state
+      store.machineWorkspaceManager.setFacility(updatedFacility);
+      
+      // Update the workspace in the UI state
+      useGameStore.setState({ 
+        machineWorkspace: store.machineWorkspaceManager.getWorkspace(store.selectedFacilityId),
+        // Trigger a re-render by updating the facilities array reference
+        facilities: [...store.facilities]
+      });
+    }
+  }
+});

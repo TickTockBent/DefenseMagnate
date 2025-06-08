@@ -476,7 +476,7 @@ export const basicSidearmComponentMethod: MachineBasedMethod = {
       description: 'Test and verify specifications',
       requiredTag: {
         category: TagCategory.MEASURING,
-        minimum: 1
+        minimum: true
       },
       baseDurationMinutes: 10,
       // QC just verifies - no material transformation
