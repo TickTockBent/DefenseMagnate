@@ -198,8 +198,16 @@ interface JobFlowDisplayProps {
 }
 
 function JobFlowDisplay({ jobs }: JobFlowDisplayProps) {
+  const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+  const cancelMachineJob = useGameStore(state => state.cancelMachineJob);
+  
   // Show up to 3 active jobs
   const activeJobs = jobs.filter(j => j.state === 'in_progress').slice(0, 3);
+  
+  const handleCancelJob = (jobId: string, facilityId: string) => {
+    cancelMachineJob(facilityId, jobId);
+    setShowCancelConfirm(null);
+  };
   
   return (
     <div className="border border-gray-600 bg-gray-900 p-3 mb-4">
@@ -210,9 +218,48 @@ function JobFlowDisplay({ jobs }: JobFlowDisplayProps) {
       ) : (
         activeJobs.map(job => (
           <div key={job.id} className="mb-3 last:mb-0">
-            <div className="text-sm text-white mb-1">
-              {formatProductName(job.productId)} ({job.method.name})
+            <div className="flex justify-between items-start mb-1">
+              <div className="text-sm text-white">
+                {formatProductName(job.productId)} ({job.method.name})
+              </div>
+              <button
+                onClick={() => setShowCancelConfirm(showCancelConfirm === job.id ? null : job.id)}
+                className="text-xs text-red-400 hover:text-red-300 px-1"
+              >
+                ✕
+              </button>
             </div>
+            
+            {/* Cancel confirmation */}
+            {showCancelConfirm === job.id && (
+              <div className="mb-2 p-2 bg-gray-800 border border-red-600 text-xs">
+                <div className="text-red-400 font-semibold mb-1">Cancel Job?</div>
+                <div className="text-gray-300 mb-2">
+                  Progress: {job.completedOperations.length}/{job.method.operations.length} operations
+                </div>
+                <div className="text-gray-400 mb-2">
+                  {job.jobInventory ? (
+                    <div>All job inventory will be returned to facility</div>
+                  ) : (
+                    <div>Created components will be recovered</div>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleCancelJob(job.id, job.facilityId)}
+                    className="bg-red-700 hover:bg-red-600 text-red-100 px-2 py-1 text-xs"
+                  >
+                    Cancel Job
+                  </button>
+                  <button
+                    onClick={() => setShowCancelConfirm(null)}
+                    className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 text-xs"
+                  >
+                    Keep Job
+                  </button>
+                </div>
+              </div>
+            )}
             
             <div className="flex space-x-2 text-xs">
               {job.method.operations.map((op, idx) => {
@@ -343,20 +390,105 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
             <div className="text-xs text-gray-500 mb-1">Select Method:</div>
             <div className="space-y-2">
               {selectedProductData.methods.map(method => {
-                // Check if all materials are available
-                const allMaterials = method.operations.flatMap(op => op.material_requirements);
-                const hasAllMaterials = allMaterials.every(mat => {
+                // NEW: Calculate net material requirements (consumption - production)
+                const materialBalance = new Map<string, { consumed: number; produced: number; tags?: string[]; maxQuality?: number }>();
+                
+                // Track consumption and production across all operations
+                method.operations.forEach(op => {
+                  // Track consumption
+                  if (op.materialConsumption) {
+                    op.materialConsumption.forEach(mc => {
+                      // For consumption, use only the meaningful state tags (rough, precision, assembly, casing)
+                      const stateTags = mc.tags?.filter(tag => ['rough', 'precision', 'assembly', 'casing'].includes(tag)).sort() || [];
+                      const key = `${mc.itemId}-${stateTags.join(',')}`;
+                      const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
+                      materialBalance.set(key, {
+                        consumed: existing.consumed + mc.count,
+                        produced: existing.produced,
+                        tags: mc.tags,
+                        maxQuality: mc.maxQuality
+                      });
+                    });
+                  }
+                  
+                  // Track production  
+                  if (op.materialProduction) {
+                    op.materialProduction.forEach(mp => {
+                      // For production, also use only meaningful state tags for key matching
+                      const stateTags = mp.tags?.filter(tag => ['rough', 'precision', 'assembly', 'casing'].includes(tag)).sort() || [];
+                      const key = `${mp.itemId}-${stateTags.join(',')}`;
+                      const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
+                      materialBalance.set(key, {
+                        consumed: existing.consumed,
+                        produced: existing.produced + mp.count,
+                        tags: mp.tags,
+                        maxQuality: existing.maxQuality
+                      });
+                    });
+                  }
+                  
+                  // Legacy format: material_requirements
+                  if (op.material_requirements) {
+                    op.material_requirements.forEach(req => {
+                      const key = `${req.material_id}-${req.required_tags?.join(',') || 'any'}`;
+                      const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
+                      materialBalance.set(key, {
+                        consumed: existing.consumed + req.quantity,
+                        produced: existing.produced,
+                        tags: req.required_tags,
+                        maxQuality: req.max_quality
+                      });
+                    });
+                  }
+                });
+                
+                // Only check materials with net consumption (consumed > produced)
+                const netRequiredMaterials: any[] = [];
+                for (const [key, balance] of materialBalance) {
+                  const netConsumption = balance.consumed - balance.produced;
+                  if (netConsumption > 0) {
+                    const itemId = key.split('-')[0];
+                    netRequiredMaterials.push({
+                      material_id: itemId,
+                      quantity: netConsumption,
+                      required_tags: balance.tags,
+                      max_quality: balance.maxQuality
+                    });
+                  }
+                }
+                
+                // Debug: Log net materials for component methods
+                if (method.id.includes('component')) {
+                  console.log(`Method ${method.id} material balance:`, Object.fromEntries(materialBalance));
+                  console.log(`Method ${method.id} net required materials:`, netRequiredMaterials);
+                }
+                
+                // Check availability and track missing materials
+                const missingMaterials: string[] = [];
+                const hasAllMaterials = netRequiredMaterials.every(mat => {
+                  const materialId = mat.material_id;
+                  const quantity = mat.quantity;
+                  const requiredTags = mat.required_tags;
+                  const maxQuality = mat.max_quality;
+                  
                   let available: number;
                   if (facility.inventory) {
-                    if (mat.required_tags && mat.required_tags.length > 0) {
-                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags, mat.max_quality);
+                    if (requiredTags && requiredTags.length > 0) {
+                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, materialId, requiredTags, maxQuality);
                     } else {
-                      available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
+                      available = inventoryManager.getAvailableQuantity(facility.inventory, materialId);
                     }
                   } else {
-                    available = facility.current_storage[mat.material_id] || 0;
+                    available = facility.current_storage[materialId] || 0;
                   }
-                  return available >= mat.quantity;
+                  
+                  const hasEnough = available >= quantity;
+                  if (!hasEnough) {
+                    const tagDisplay = requiredTags && requiredTags.length > 0 ? ` [${requiredTags.join(', ')}]` : '';
+                    const qualityDisplay = maxQuality !== undefined ? ` (≤${maxQuality}%)` : '';
+                    missingMaterials.push(`${quantity} ${materialId}${tagDisplay}${qualityDisplay} (have: ${available})`);
+                  }
+                  return hasEnough;
                 });
                 
                 return (
@@ -380,6 +512,7 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                           <button
                             onClick={() => handleStartJob(facility.id, selectedProduct!, method.id, 1)}
                             disabled={!hasAllMaterials}
+                            title={!hasAllMaterials ? `Missing materials:\n${missingMaterials.join('\n')}` : ''}
                             className={`px-3 py-1 text-xs border transition-colors ${
                               !hasAllMaterials
                                 ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
@@ -397,29 +530,72 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                     {showMethodDetails === method.id && (
                       <div className="mt-3 pt-3 border-t border-gray-700">
                         <div className="text-xs">
-                          <div className="mb-2">
-                            <span className="text-gray-500">Materials:</span>
-                            <div className="ml-2 space-y-1">
-                              {method.operations.flatMap(op => op.material_requirements).map((mat, idx) => {
-                                // Check availability from new inventory or legacy storage
-                                let available: number;
-                                if (facility.inventory) {
-                                  if (mat.required_tags && mat.required_tags.length > 0) {
-                                    available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags, mat.max_quality);
+                          {/* NEW: Show operation flow for component-based methods */}
+                          {method.id.includes('component') ? (
+                            <div className="mb-3">
+                              <span className="text-gray-500">Component Flow:</span>
+                              <div className="ml-2 space-y-2 mt-2">
+                                {method.operations.map((op, idx) => (
+                                  <div key={op.id} className="text-xs">
+                                    <div className="text-yellow-400 font-semibold">
+                                      {idx + 1}. {op.name} ({op.baseDurationMinutes}min)
+                                    </div>
+                                    <div className="ml-3 text-gray-400">
+                                      {op.materialConsumption && op.materialConsumption.length > 0 && (
+                                        <div>
+                                          <span className="text-red-300">Consumes:</span>
+                                          {op.materialConsumption.map(mc => (
+                                            <span key={mc.itemId} className="ml-1">
+                                              {mc.count} {mc.itemId.replace(/-/g, ' ')}
+                                              {mc.tags && mc.tags.length > 0 && <span className="text-blue-300"> [{mc.tags.join(', ')}]</span>}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {op.materialProduction && op.materialProduction.length > 0 && (
+                                        <div>
+                                          <span className="text-green-300">Produces:</span>
+                                          {op.materialProduction.map(mp => (
+                                            <span key={mp.itemId} className="ml-1">
+                                              {mp.count} {mp.itemId.replace(/-/g, ' ')}
+                                              {mp.tags && mp.tags.length > 0 && <span className="text-blue-300"> [{mp.tags.join(', ')}]</span>}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {!op.materialConsumption && !op.materialProduction && (
+                                        <div className="text-gray-500">Preparation step</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            /* Legacy materials display */
+                            <div className="mb-2">
+                              <span className="text-gray-500">Materials:</span>
+                              <div className="ml-2 space-y-1">
+                                {method.operations.flatMap(op => op.material_requirements || []).map((mat, idx) => {
+                                  // Check availability from new inventory or legacy storage
+                                  let available: number;
+                                  if (facility.inventory) {
+                                    if (mat.required_tags && mat.required_tags.length > 0) {
+                                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags, mat.max_quality);
+                                    } else {
+                                      available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
+                                    }
                                   } else {
-                                    available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
+                                    available = facility.current_storage[mat.material_id] || 0;
                                   }
-                                } else {
-                                  available = facility.current_storage[mat.material_id] || 0;
-                                }
-                                const hasEnough = available >= mat.quantity;
-                                
-                                const tagDisplay = mat.required_tags && mat.required_tags.length > 0 
-                                  ? ` [${mat.required_tags.join(', ')}]` 
-                                  : '';
-                                const qualityDisplay = mat.max_quality !== undefined 
-                                  ? ` (≤${mat.max_quality}%)` 
-                                  : '';
+                                  const hasEnough = available >= mat.quantity;
+                                  
+                                  const tagDisplay = mat.required_tags && mat.required_tags.length > 0 
+                                    ? ` [${mat.required_tags.join(', ')}]` 
+                                    : '';
+                                  const qualityDisplay = mat.max_quality !== undefined 
+                                    ? ` (≤${mat.max_quality}%)` 
+                                    : '';
                                 
                                 return (
                                   <div key={idx} className={hasEnough ? "text-gray-400" : "text-red-400"}>
@@ -430,21 +606,26 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                                   </div>
                                 );
                               })}
-                              {method.operations.every(op => op.material_requirements.length === 0) && (
+                              {method.operations.every(op => !op.material_requirements || op.material_requirements.length === 0) && (
                                 <div className="text-gray-400">No materials required</div>
                               )}
                             </div>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Operations:</span>
-                            <div className="ml-2 space-y-1">
-                              {method.operations.map((op, idx) => (
-                                <div key={op.id} className="text-gray-400">
-                                  {idx + 1}. {op.name} ({op.baseDurationMinutes}min) - {op.description}
-                                </div>
-                              ))}
                             </div>
-                          </div>
+                          )}
+                          
+                          {/* Operations display (for both types) */}
+                          {!method.id.includes('component') && (
+                            <div>
+                              <span className="text-gray-500">Operations:</span>
+                              <div className="ml-2 space-y-1">
+                                {method.operations.map((op, idx) => (
+                                  <div key={op.id} className="text-gray-400">
+                                    {idx + 1}. {op.name} ({op.baseDurationMinutes}min) - {op.description}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

@@ -163,6 +163,7 @@ interface GameState {
     quantity: number,
     rushOrder?: boolean
   ) => void;
+  cancelMachineJob: (facilityId: string, jobId: string) => boolean;
   
   // System update
   updateProduction: () => void;
@@ -628,6 +629,27 @@ export const useGameStore = create<GameState>((set, get) => ({
     
     // Single state update with the current workspace
     set({ machineWorkspace: state.machineWorkspaceManager.getWorkspace(facilityId) });
+  },
+  
+  // Cancel a machine job and recover materials
+  cancelMachineJob: (facilityId: string, jobId: string) => {
+    const state = get();
+    const facility = state.facilities.find(f => f.id === facilityId);
+    if (!facility) {
+      console.error(`Cannot cancel job ${jobId}: facility ${facilityId} not found`);
+      return false;
+    }
+    
+    // Use the machine workspace manager to cancel the job
+    const success = state.machineWorkspaceManager.cancelJob(facilityId, jobId);
+    
+    if (success) {
+      // Update the workspace state after cancellation
+      set({ machineWorkspace: state.machineWorkspaceManager.getWorkspace(facilityId) });
+      console.log(`Job ${jobId} cancelled successfully`);
+    }
+    
+    return success;
   },
   
   // Main production update loop

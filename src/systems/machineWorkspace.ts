@@ -5,9 +5,7 @@ import {
   MachineWorkspace, 
   MachineSlotJob,
   MachineBasedMethod,
-  MachineOperation
-} from '../types/machineSlot';
-import { 
+  MachineOperation,
   Facility, 
   Equipment, 
   EquipmentInstance,
@@ -16,7 +14,7 @@ import {
   JobPriority,
   ItemInstance,
   ItemTag
-} from '../types';
+} from '../types'; // Using barrel exports
 import { TIME_SCALE, type GameTime } from '../utils/gameClock';
 import { inventoryManager } from '../utils/inventoryManager';
 import { createItemInstance } from '../utils/itemSystem';
@@ -179,6 +177,12 @@ export class MachineWorkspaceManager {
     const workspace = this.workspaces.get(facilityId);
     if (!workspace) throw new Error('Workspace not initialized');
     
+    const facility = this.facilities.get(facilityId);
+    if (!facility) throw new Error('Facility not found');
+    
+    // Create job inventory
+    const jobInventory = inventoryManager.createEmptyInventory(100); // Small capacity for job
+    
     const job: MachineSlotJob = {
       id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       facilityId,
@@ -192,9 +196,16 @@ export class MachineWorkspaceManager {
       currentOperationIndex: 0,
       completedOperations: [],
       
-      // Initialize material tracking
+      // NEW: Job sub-inventory system
+      jobInventory,
+      operationProducts: new Map(),
+      
+      // Initialize material tracking (legacy)
       consumedMaterials: new Map()
     };
+    
+    // Move required materials from facility to job inventory
+    this.moveJobMaterials(job, facility);
     
     // Add to facility queue and sort by priority
     this.addJobToQueue(workspace, job);
@@ -202,6 +213,73 @@ export class MachineWorkspaceManager {
     console.log(`Job ${job.id} added to facility queue for ${job.method.operations[0]?.name}`);
     
     return job;
+  }
+  
+  // Move materials from facility to job inventory
+  private moveJobMaterials(job: MachineSlotJob, facility: Facility): void {
+    if (!facility.inventory) {
+      console.warn('Facility has no inventory system');
+      return;
+    }
+    
+    // Collect all materials needed for all operations
+    const materialsNeeded = new Map<string, { count: number; tags?: ItemTag[]; maxQuality?: number }>();
+    
+    for (const operation of job.method.operations) {
+      if (operation.materialConsumption) {
+        // NEW: Use materialConsumption for component-based methods
+        for (const consumption of operation.materialConsumption) {
+          const key = `${consumption.itemId}-${consumption.tags?.join(',') || 'any'}`;
+          const existing = materialsNeeded.get(key);
+          materialsNeeded.set(key, {
+            count: (existing?.count || 0) + consumption.count * job.quantity,
+            tags: consumption.tags,
+            maxQuality: consumption.maxQuality
+          });
+        }
+      } else if (operation.material_requirements) {
+        // LEGACY: Support old material_requirements format
+        for (const req of operation.material_requirements) {
+          const key = `${req.material_id}-${req.required_tags?.join(',') || 'any'}`;
+          const existing = materialsNeeded.get(key);
+          materialsNeeded.set(key, {
+            count: (existing?.count || 0) + req.quantity * job.quantity,
+            tags: req.required_tags,
+            maxQuality: req.max_quality
+          });
+        }
+      }
+    }
+    
+    // Move materials from facility to job
+    for (const [key, requirement] of materialsNeeded) {
+      const itemId = key.split('-')[0];
+      let itemsToMove: ItemInstance[];
+      
+      if (requirement.tags && requirement.tags.length > 0) {
+        itemsToMove = inventoryManager.getBestQualityItemsWithTags(
+          facility.inventory,
+          itemId,
+          requirement.count,
+          requirement.tags,
+          requirement.maxQuality
+        );
+      } else {
+        itemsToMove = inventoryManager.getBestQualityItems(
+          facility.inventory,
+          itemId,
+          requirement.count
+        );
+      }
+      
+      // Move items to job inventory
+      for (const item of itemsToMove) {
+        inventoryManager.removeItem(facility.inventory, item.id, item.quantity);
+        inventoryManager.addItem(job.jobInventory, item);
+      }
+      
+      console.log(`Moved ${itemsToMove.length} ${itemId} items to job ${job.id}`);
+    }
   }
   
   // Add job to facility queue with proper priority sorting
@@ -223,31 +301,57 @@ export class MachineWorkspaceManager {
   }
   
   
-  // Check if operation can start (materials available)
+  // Check if operation can start (materials available in job inventory)
   private canStartOperation(job: MachineSlotJob, facility: Facility): boolean {
     const operation = job.method.operations[job.currentOperationIndex];
     
-    for (const mat of operation.material_requirements) {
-      if (mat.consumed_at_start) {
-        // Check new inventory system first
-        if (facility.inventory) {
-          let available: number;
-          if (mat.required_tags && mat.required_tags.length > 0) {
-            // Count items with specific tags and quality constraints
-            available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags, mat.max_quality);
-          } else {
-            // Count all items of this type
-            available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
-          }
-          if (available < mat.quantity * job.quantity) {
-            return false;
-          }
+    // NEW: Check materialConsumption first
+    if (operation.materialConsumption) {
+      for (const consumption of operation.materialConsumption) {
+        const needed = consumption.count * job.quantity;
+        let available: number;
+        
+        if (consumption.tags && consumption.tags.length > 0) {
+          available = inventoryManager.getAvailableQuantityWithTags(
+            job.jobInventory, 
+            consumption.itemId, 
+            consumption.tags, 
+            consumption.maxQuality
+          );
         } else {
-          // Fall back to legacy storage
-          const available = facility.current_storage[mat.material_id] || 0;
-          if (available < mat.quantity * job.quantity) {
-            return false;
-          }
+          available = inventoryManager.getAvailableQuantity(job.jobInventory, consumption.itemId);
+        }
+        
+        if (available < needed) {
+          console.log(`Job ${job.id} lacks materials: need ${needed} ${consumption.itemId}, have ${available}`);
+          return false;
+        }
+      }
+      return true;
+    }
+    
+    // LEGACY: Check old material_requirements format
+    if (operation.material_requirements) {
+      for (const mat of operation.material_requirements) {
+        // For legacy operations, we no longer check consumed_at_start
+        // All materials should now be in the job inventory
+        const needed = mat.quantity * job.quantity;
+        let available: number;
+        
+        if (mat.required_tags && mat.required_tags.length > 0) {
+          available = inventoryManager.getAvailableQuantityWithTags(
+            job.jobInventory, 
+            mat.material_id, 
+            mat.required_tags, 
+            mat.max_quality
+          );
+        } else {
+          available = inventoryManager.getAvailableQuantity(job.jobInventory, mat.material_id);
+        }
+        
+        if (available < needed) {
+          console.log(`Job ${job.id} lacks materials: need ${needed} ${mat.material_id}, have ${available}`);
+          return false;
         }
       }
     }
@@ -255,49 +359,48 @@ export class MachineWorkspaceManager {
     return true;
   }
   
-  // Consume materials for current operation
+  // Consume materials for current operation (from job inventory)
   private consumeOperationMaterials(job: MachineSlotJob, facility: Facility): void {
     const operation = job.method.operations[job.currentOperationIndex];
     
-    for (const mat of operation.material_requirements) {
-      if (mat.consumed_at_start) {
-        const needed = mat.quantity * job.quantity;
-        
-        // Use new inventory system if available
-        if (facility.inventory) {
-          let itemsToConsume: any[];
+    // This function now only handles consumption at operation START
+    // Material consumption is now handled in completeOperation when materials are transformed
+    
+    // For backwards compatibility with old operations that still use consumed_at_start: true
+    if (operation.material_requirements) {
+      for (const mat of operation.material_requirements) {
+        if (mat.consumed_at_start) {
+          const needed = mat.quantity * job.quantity;
+          
+          let itemsToConsume: ItemInstance[];
           if (mat.required_tags && mat.required_tags.length > 0) {
-            // Find items with specific tags and quality constraints
             itemsToConsume = inventoryManager.getBestQualityItemsWithTags(
-              facility.inventory, 
+              job.jobInventory, 
               mat.material_id, 
               needed,
               mat.required_tags,
               mat.max_quality
             );
           } else {
-            // Find best quality items of any type
             itemsToConsume = inventoryManager.getBestQualityItems(
-              facility.inventory, 
+              job.jobInventory, 
               mat.material_id, 
               needed
             );
           }
           
-          // Remove items from inventory
+          // Remove items from job inventory
           for (const item of itemsToConsume) {
-            inventoryManager.removeItem(facility.inventory, item.id, item.quantity);
+            inventoryManager.removeItem(job.jobInventory, item.id, item.quantity);
           }
-        } else {
-          // Fall back to legacy storage
-          facility.current_storage[mat.material_id] = 
-            (facility.current_storage[mat.material_id] || 0) - needed;
+          
+          // Track consumed materials
+          if (!job.consumedMaterials) job.consumedMaterials = new Map();
+          const consumed = job.consumedMaterials.get(mat.material_id) || 0;
+          job.consumedMaterials.set(mat.material_id, consumed + needed);
+          
+          console.log(`Job ${job.id} consumed ${needed} ${mat.material_id} at operation start`);
         }
-        
-        // Track consumed materials
-        if (!job.consumedMaterials) job.consumedMaterials = new Map();
-        const consumed = job.consumedMaterials.get(mat.material_id) || 0;
-        job.consumedMaterials.set(mat.material_id, consumed + needed);
       }
     }
   }
@@ -476,7 +579,10 @@ export class MachineWorkspaceManager {
       }
       // For 'rework', just repeat the operation
     } else {
-      // Success! Mark operation complete
+      // Success! Handle material transformation
+      this.processOperationTransformation(job, operation);
+      
+      // Mark operation complete
       job.completedOperations.push(operation.id);
       job.currentOperationIndex++;
       
@@ -490,41 +596,11 @@ export class MachineWorkspaceManager {
     
     // Check if job is complete or needs next operation
     if (job.currentOperationIndex >= job.method.operations.length) {
-      // Job complete!
+      // Job complete! Move any remaining items from job inventory to facility
+      this.finalizeJobInventory(job, facility);
+      
       job.state = 'completed';
       job.completedAt = this.currentGameTime.totalGameHours;
-      
-      // Add finished product to storage
-      if (facility.inventory && job.method.outputTags) {
-        // Use new inventory system with tags
-        const [minQuality, maxQuality] = job.method.qualityRange || job.method.output_quality_range || [75, 95];
-        const baseQuality = minQuality + Math.random() * (maxQuality - minQuality);
-        
-        // Apply quality cap if specified
-        const finalQuality = job.method.qualityCap 
-          ? Math.min(baseQuality, job.method.qualityCap)
-          : baseQuality;
-        
-        // Create item instance with output tags
-        const productItem = createItemInstance({
-          baseItemId: job.productId,
-          tags: job.method.outputTags,
-          quality: finalQuality,
-          quantity: job.quantity,
-          metadata: {
-            source: 'manufacturing',
-            methodId: job.method.id,
-            completedAt: this.currentGameTime.totalGameHours
-          }
-        });
-        
-        inventoryManager.addItem(facility.inventory, productItem);
-      } else {
-        // Fall back to legacy storage
-        const productKey = `${job.productId}_${job.method.output_state}`;
-        facility.current_storage[productKey] = 
-          (facility.current_storage[productKey] || 0) + job.quantity;
-      }
       
       workspace.completedJobs.push(job);
       
@@ -557,5 +633,252 @@ export class MachineWorkspaceManager {
   // Get workspace for facility
   getWorkspace(facilityId: string): MachineWorkspace | undefined {
     return this.workspaces.get(facilityId);
+  }
+  
+  // NEW: Cancel a job and recover materials from job inventory
+  cancelJob(facilityId: string, jobId: string): boolean {
+    const workspace = this.workspaces.get(facilityId);
+    const facility = this.facilities.get(facilityId);
+    
+    if (!workspace || !facility) {
+      console.error(`Cannot cancel job ${jobId}: workspace or facility not found`);
+      return false;
+    }
+    
+    // Find the job (could be in queue or currently processing)
+    let job: MachineSlotJob | undefined;
+    let jobLocation: 'queue' | 'machine' | 'completed' | null = null;
+    let machineSlot: MachineSlot | undefined;
+    
+    // Check if job is in queue
+    const queueIndex = workspace.jobQueue.findIndex(j => j.id === jobId);
+    if (queueIndex !== -1) {
+      job = workspace.jobQueue[queueIndex];
+      jobLocation = 'queue';
+    }
+    
+    // Check if job is currently being processed on a machine
+    if (!job) {
+      for (const slot of workspace.machines.values()) {
+        if (slot.currentJob?.id === jobId) {
+          job = slot.currentJob;
+          jobLocation = 'machine';
+          machineSlot = slot;
+          break;
+        }
+      }
+    }
+    
+    // Check if job is already completed
+    if (!job) {
+      const completedIndex = workspace.completedJobs.findIndex(j => j.id === jobId);
+      if (completedIndex !== -1) {
+        console.warn(`Job ${jobId} is already completed and cannot be cancelled`);
+        return false;
+      }
+    }
+    
+    if (!job) {
+      console.error(`Job ${jobId} not found`);
+      return false;
+    }
+    
+    // Calculate what can be recovered
+    const recoveryInfo = this.calculateCancellationRecovery(job);
+    
+    // Recovery: Move all items from job inventory back to facility
+    this.finalizeJobInventory(job, facility);
+    
+    // Clean up job state
+    job.state = 'cancelled';
+    job.completedAt = this.currentGameTime.totalGameHours;
+    
+    // Remove job from its current location
+    if (jobLocation === 'queue') {
+      workspace.jobQueue.splice(queueIndex, 1);
+    } else if (jobLocation === 'machine' && machineSlot) {
+      // Clear machine
+      machineSlot.currentJob = undefined;
+      machineSlot.currentProgress = undefined;
+    }
+    
+    // Add to completed jobs for record keeping
+    workspace.completedJobs.push(job);
+    
+    console.log(`Job ${jobId} cancelled. Recovery: ${recoveryInfo.totalItemsRecovered} items, ${recoveryInfo.estimatedValue} credits value`);
+    
+    return true;
+  }
+  
+  // NEW: Calculate what would be recovered if job is cancelled
+  calculateCancellationRecovery(job: MachineSlotJob): {
+    recoveredItems: { itemId: string; quantity: number; tags: string[] }[];
+    totalItemsRecovered: number;
+    estimatedValue: number;
+    operationsCompleted: number;
+    timeInvested: number;
+  } {
+    const recoveredItems: { itemId: string; quantity: number; tags: string[] }[] = [];
+    let totalItems = 0;
+    let estimatedValue = 0;
+    
+    // Calculate items that would be recovered from job inventory
+    for (const group of job.jobInventory.groups.values()) {
+      for (const slot of group.slots) {
+        for (const instance of slot.stack.instances) {
+          recoveredItems.push({
+            itemId: instance.baseItemId,
+            quantity: instance.quantity,
+            tags: instance.tags
+          });
+          totalItems += instance.quantity;
+          // Simple value estimation (would need proper calculation in real implementation)
+          estimatedValue += instance.quantity * 10; // Placeholder
+        }
+      }
+    }
+    
+    return {
+      recoveredItems,
+      totalItemsRecovered: totalItems,
+      estimatedValue,
+      operationsCompleted: job.completedOperations.length,
+      timeInvested: job.startedAt ? (this.currentGameTime.totalGameHours - job.startedAt) : 0
+    };
+  }
+  
+  // NEW: Process material transformation during operation completion
+  private processOperationTransformation(job: MachineSlotJob, operation: MachineOperation): void {
+    const producedItems: ItemInstance[] = [];
+    
+    // Handle new materialConsumption/materialProduction system
+    if (operation.materialConsumption || operation.materialProduction) {
+      // Consume materials
+      if (operation.materialConsumption) {
+        for (const consumption of operation.materialConsumption) {
+          const needed = consumption.count * job.quantity;
+          
+          let itemsToConsume: ItemInstance[];
+          if (consumption.tags && consumption.tags.length > 0) {
+            itemsToConsume = inventoryManager.getBestQualityItemsWithTags(
+              job.jobInventory,
+              consumption.itemId,
+              needed,
+              consumption.tags,
+              consumption.maxQuality
+            );
+          } else {
+            itemsToConsume = inventoryManager.getBestQualityItems(
+              job.jobInventory,
+              consumption.itemId,
+              needed
+            );
+          }
+          
+          // Remove consumed items
+          for (const item of itemsToConsume) {
+            inventoryManager.removeItem(job.jobInventory, item.id, item.quantity);
+          }
+          
+          // Track consumption for record keeping
+          if (!job.consumedMaterials) job.consumedMaterials = new Map();
+          const consumed = job.consumedMaterials.get(consumption.itemId) || 0;
+          job.consumedMaterials.set(consumption.itemId, consumed + needed);
+          
+          console.log(`Job ${job.id} consumed ${needed} ${consumption.itemId} during operation`);
+        }
+      }
+      
+      // Produce materials
+      if (operation.materialProduction) {
+        for (const production of operation.materialProduction) {
+          const quantity = production.count * job.quantity;
+          
+          // Create produced item
+          const producedItem = createItemInstance({
+            baseItemId: production.itemId,
+            tags: production.tags || [],
+            quality: production.quality || 85, // Default quality if not specified
+            quantity,
+            metadata: {
+              source: 'manufacturing',
+              operationId: operation.id,
+              jobId: job.id,
+              producedAt: this.currentGameTime.totalGameHours
+            }
+          });
+          
+          // Add to job inventory
+          inventoryManager.addItem(job.jobInventory, producedItem);
+          producedItems.push(producedItem);
+          
+          console.log(`Job ${job.id} produced ${quantity} ${production.itemId} with tags [${production.tags?.join(', ')}]`);
+        }
+      }
+    } else if (operation.material_requirements) {
+      // LEGACY: Handle old material_requirements with consumed_at_start: false
+      // TODO: Remove this branch after migrating all methods to new system
+      for (const req of operation.material_requirements) {
+        if (!req.consumed_at_start) {
+          const needed = req.quantity * job.quantity;
+          
+          let itemsToConsume: ItemInstance[];
+          if (req.required_tags && req.required_tags.length > 0) {
+            itemsToConsume = inventoryManager.getBestQualityItemsWithTags(
+              job.jobInventory,
+              req.material_id,
+              needed,
+              req.required_tags,
+              req.max_quality
+            );
+          } else {
+            itemsToConsume = inventoryManager.getBestQualityItems(
+              job.jobInventory,
+              req.material_id,
+              needed
+            );
+          }
+          
+          // Remove consumed items
+          for (const item of itemsToConsume) {
+            inventoryManager.removeItem(job.jobInventory, item.id, item.quantity);
+          }
+          
+          // Track consumption
+          if (!job.consumedMaterials) job.consumedMaterials = new Map();
+          const consumed = job.consumedMaterials.get(req.material_id) || 0;
+          job.consumedMaterials.set(req.material_id, consumed + needed);
+          
+          console.log(`Job ${job.id} consumed ${needed} ${req.material_id} during operation (legacy)`);
+        }
+      }
+    }
+    
+    // Track operation products
+    if (producedItems.length > 0) {
+      job.operationProducts.set(job.currentOperationIndex, producedItems);
+    }
+  }
+  
+  // NEW: Move all remaining items from job inventory to facility inventory
+  private finalizeJobInventory(job: MachineSlotJob, facility: Facility): void {
+    if (!facility.inventory) {
+      console.warn('Facility has no inventory system for job finalization');
+      return;
+    }
+    
+    // Move all items from job inventory to facility inventory
+    for (const group of job.jobInventory.groups.values()) {
+      for (const slot of group.slots) {
+        for (const instance of slot.stack.instances) {
+          // Remove from job inventory
+          inventoryManager.removeItem(job.jobInventory, instance.id, instance.quantity);
+          // Add to facility inventory
+          inventoryManager.addItem(facility.inventory, instance);
+        }
+      }
+    }
+    
+    console.log(`Job ${job.id} finalized - all items moved to facility inventory`);
   }
 }

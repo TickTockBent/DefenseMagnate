@@ -24,6 +24,13 @@ export enum ItemTag {
   STANDARD = 'standard',        // Standard grade materials
   PREMIUM = 'premium',          // High grade materials
   
+  // NEW: Component Manufacturing Tags
+  ROUGH = 'rough',              // Unfinished manufacturing state
+  PRECISION = 'precision',       // Refined manufacturing state
+  ASSEMBLY = 'assembly',         // Combined components
+  CASING = 'casing',            // External housing/protection
+  LOW_TECH = 'low-tech',        // Basic technology level
+  
   // Special Tags
   PROTOTYPE = 'prototype',       // Experimental items with unique properties
   CUSTOM = 'custom',            // Player-customized items

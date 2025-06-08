@@ -1,3 +1,8 @@
+// LEGACY COMPONENT - NOT USED
+// This component is superseded by MachineWorkspaceView.tsx
+// The manufacturing tab now uses the machine workspace system instead of this legacy production system
+// TODO: Remove this file after confirming no dependencies
+
 import { useGameStore } from '../state/gameStore'
 import { getAllProductIds, getProductData, canAffordMaterials } from '../data/productHelpers'
 import { getProductionProgress, formatGameTimeRemaining, getProductionTimeRemainingHours } from '../utils/timeSystem'
