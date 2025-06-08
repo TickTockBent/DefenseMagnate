@@ -17,7 +17,14 @@ export class ManufacturingV2Integration {
    * This integrates the new dynamic system with existing job infrastructure
    */
   static convertPlanToMethod(plan: ManufacturingPlan): MachineBasedMethod {
-    const operations = plan.requiredOperations.map(op => this.convertDynamicOperation(op));
+    console.log(`ManufacturingV2Integration: Converting plan for ${plan.targetProduct} with ${plan.requiredOperations.length} operations`);
+    
+    const operations = plan.requiredOperations.map(op => {
+      console.log(`ManufacturingV2Integration: Converting operation: ${op.name}`);
+      return this.convertDynamicOperation(op);
+    });
+    
+    console.log(`ManufacturingV2Integration: Converted to ${operations.length} machine operations`);
     
     return {
       id: `dynamic_${plan.targetProduct}_${Date.now()}`,
@@ -75,14 +82,52 @@ export class ManufacturingV2Integration {
     inputItems: ItemInstance[] = [],
     availableInventory: ItemInstance[] = []
   ): MachineBasedMethod {
-    const plan = WorkflowGenerator.generateManufacturingPlan(
-      targetProductId,
-      targetQuantity,
-      inputItems,
-      availableInventory
-    );
-    
-    return this.convertPlanToMethod(plan);
+    try {
+      const plan = WorkflowGenerator.generateManufacturingPlan(
+        targetProductId,
+        targetQuantity,
+        inputItems,
+        availableInventory
+      );
+      
+      console.log(`Generated Manufacturing v2 plan for ${targetProductId}:`, {
+        operationCount: plan.requiredOperations.length,
+        operations: plan.requiredOperations.map(op => op.name),
+        estimatedDuration: plan.estimatedDuration
+      });
+      
+      return this.convertPlanToMethod(plan);
+    } catch (error) {
+      console.error(`Failed to generate Manufacturing v2 plan for ${targetProductId}:`, error);
+      
+      // Fallback to a simple placeholder method
+      return {
+        id: `fallback_${targetProductId}`,
+        name: `Manual Craft (${targetProductId})`,
+        description: `Simple manual crafting method for ${targetProductId} (Manufacturing v2 fallback)`,
+        outputTags: [ItemTag.FORGED, ItemTag.LOW_TECH],
+        qualityRange: [50, 80],
+        operations: [{
+          id: 'manual_craft',
+          name: 'Manual Crafting',
+          description: 'Basic manual crafting using available tools',
+          requiredTag: {
+            category: TagCategory.BASIC_MANIPULATION,
+            minimum: 5
+          },
+          baseDurationMinutes: 60,
+          can_fail: true,
+          failure_chance: 0.1,
+          labor_skill: 'skilled_technician'
+        }],
+        output_state: 'functional',
+        output_quality_range: [50, 80],
+        labor_cost_multiplier: 1.2,
+        complexity_rating: 3,
+        profit_margin_modifier: 0.8,
+        customer_appeal: ['manual_crafting']
+      };
+    }
   }
   
   /**

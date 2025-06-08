@@ -1,14 +1,14 @@
 // Machine Workspace View - Shows machines with job slots
 
 import { useGameStore } from '../state/gameStoreWithEquipment';
-import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility, ItemTag } from '../types';
+import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility, ItemTag, ItemManufacturingType } from '../types';
 import { Equipment, EquipmentInstance } from '../types';
 import { formatGameTime } from '../utils/gameClock';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
 import { inventoryManager } from '../utils/inventoryManager';
 import { getDisplayName, getQualityDescription } from '../utils/itemSystem';
-import { baseItems } from '../data/baseItems';
+import { baseItems, getBaseItem } from '../data/baseItems';
 
 // Helper function to format product names for display
 function formatProductName(productId: string): string {
@@ -16,6 +16,61 @@ function formatProductName(productId: string): string {
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+// Manufacturing v2 workflow simulation - returns raw material requirements only
+function simulateManufacturingV2Workflow(method: any): Array<{ materialId: string; quantity: number }> {
+  const rawMaterialCounts = new Map<string, number>();
+  
+  // Track all material flows through the operations
+  const inventory = new Map<string, number>(); // Simulated workflow inventory
+  
+  // Process operations in sequence to simulate workflow
+  for (const operation of method.operations) {
+    // Consume materials for this operation
+    if (operation.materialConsumption) {
+      for (const consumption of operation.materialConsumption) {
+        const needed = consumption.count;
+        const available = inventory.get(consumption.itemId) || 0;
+        
+        if (available >= needed) {
+          // Use from workflow inventory
+          inventory.set(consumption.itemId, available - needed);
+        } else {
+          // Need to source additional materials
+          const stillNeeded = needed - available;
+          inventory.set(consumption.itemId, 0); // Use all available
+          
+          // Check if this is a raw material or intermediate
+          const baseItem = getBaseItem(consumption.itemId);
+          if (baseItem?.manufacturingType === ItemManufacturingType.RAW_MATERIAL) {
+            // This is a raw material - add to requirements
+            const existing = rawMaterialCounts.get(consumption.itemId) || 0;
+            rawMaterialCounts.set(consumption.itemId, existing + stillNeeded);
+          } else {
+            // This is an intermediate material - it should be produced by earlier operations
+            // If it's not available, there's likely an issue with the workflow
+            console.warn(`Manufacturing v2 workflow missing intermediate material: ${consumption.itemId}`);
+          }
+        }
+      }
+    }
+    
+    // Produce materials from this operation
+    if (operation.materialProduction) {
+      for (const production of operation.materialProduction) {
+        const produced = production.count;
+        const existing = inventory.get(production.itemId) || 0;
+        inventory.set(production.itemId, existing + produced);
+      }
+    }
+  }
+  
+  // Convert map to array format
+  return Array.from(rawMaterialCounts.entries()).map(([materialId, quantity]) => ({
+    materialId,
+    quantity
+  }));
 }
 
 interface MachineCardProps {
@@ -670,107 +725,128 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
             <div className="text-xs text-gray-500 mb-1">Select Method:</div>
             <div className="space-y-2">
               {selectedProductData.methods.map(method => {
-                // NEW: Calculate net material requirements (consumption - production)
-                const materialBalance = new Map<string, { consumed: number; produced: number; tags?: string[]; maxQuality?: number }>();
+                // NEW: Manufacturing v2 workflow simulation and validation
+                const isManufacturingV2 = method.id.includes('v2') || method.name.includes('v2');
                 
-                // Track consumption and production across all operations
-                method.operations.forEach(op => {
-                  // Track consumption
-                  if (op.materialConsumption) {
-                    op.materialConsumption.forEach(mc => {
-                      // For consumption, use only the meaningful state tags (rough, precision, assembly, casing)
-                      const stateTags = mc.tags?.filter(tag => ['rough', 'precision', 'assembly', 'casing'].includes(tag)).sort() || [];
-                      const key = `${mc.itemId}-${stateTags.join(',')}`;
-                      const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
-                      materialBalance.set(key, {
-                        consumed: existing.consumed + mc.count,
-                        produced: existing.produced,
-                        tags: mc.tags,
-                        maxQuality: mc.maxQuality
-                      });
-                    });
-                  }
-                  
-                  // Track production  
-                  if (op.materialProduction) {
-                    op.materialProduction.forEach(mp => {
-                      // For production, also use only meaningful state tags for key matching
-                      const stateTags = mp.tags?.filter(tag => ['rough', 'precision', 'assembly', 'casing'].includes(tag)).sort() || [];
-                      const key = `${mp.itemId}-${stateTags.join(',')}`;
-                      const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
-                      materialBalance.set(key, {
-                        consumed: existing.consumed,
-                        produced: existing.produced + mp.count,
-                        tags: mp.tags,
-                        maxQuality: existing.maxQuality
-                      });
-                    });
-                  }
-                  
-                  // Legacy format: material_requirements
-                  if (op.material_requirements) {
-                    op.material_requirements.forEach(req => {
-                      const key = `${req.material_id}-${req.required_tags?.join(',') || 'any'}`;
-                      const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
-                      materialBalance.set(key, {
-                        consumed: existing.consumed + req.quantity,
-                        produced: existing.produced,
-                        tags: req.required_tags,
-                        maxQuality: req.max_quality
-                      });
-                    });
-                  }
-                });
-                
-                // Only check materials with net consumption (consumed > produced)
-                const netRequiredMaterials: Array<{
-                  material_id: string;
-                  quantity: number;
-                  required_tags?: string[];
-                  max_quality?: number;
-                }> = [];
-                for (const [key, balance] of materialBalance) {
-                  const netConsumption = balance.consumed - balance.produced;
-                  if (netConsumption > 0) {
-                    const itemId = key.split('-')[0];
-                    netRequiredMaterials.push({
-                      material_id: itemId,
-                      quantity: netConsumption,
-                      required_tags: balance.tags,
-                      max_quality: balance.maxQuality
-                    });
-                  }
-                }
-                
-                // Debug logging removed - component methods working correctly
-                
-                // Check availability and track missing materials
+                let hasAllMaterials = false;
                 const missingMaterials: string[] = [];
-                const hasAllMaterials = netRequiredMaterials.every(mat => {
-                  const materialId = mat.material_id;
-                  const quantity = mat.quantity;
-                  const requiredTags = mat.required_tags;
-                  const maxQuality = mat.max_quality;
+                
+                if (isManufacturingV2) {
+                  // Manufacturing v2: Simulate workflow and check only raw materials
+                  const rawMaterialNeeds = simulateManufacturingV2Workflow(method);
                   
-                  let available: number;
-                  if (facility.inventory) {
-                    if (requiredTags && requiredTags.length > 0) {
-                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, materialId, requiredTags as ItemTag[], maxQuality);
+                  hasAllMaterials = rawMaterialNeeds.every(need => {
+                    let available: number;
+                    if (facility.inventory) {
+                      available = inventoryManager.getAvailableQuantity(facility.inventory, need.materialId);
                     } else {
-                      available = inventoryManager.getAvailableQuantity(facility.inventory, materialId);
+                      available = facility.current_storage[need.materialId] || 0;
                     }
-                  } else {
-                    available = facility.current_storage[materialId] || 0;
+                    
+                    const hasEnough = available >= need.quantity;
+                    if (!hasEnough) {
+                      missingMaterials.push(`${need.quantity} ${need.materialId} (have: ${available})`);
+                    }
+                    return hasEnough;
+                  });
+                } else {
+                  // Legacy: Calculate net material requirements (consumption - production)
+                  const materialBalance = new Map<string, { consumed: number; produced: number; tags?: string[]; maxQuality?: number }>();
+                  
+                  // Track consumption and production across all operations
+                  method.operations.forEach(op => {
+                    // Track consumption
+                    if (op.materialConsumption) {
+                      op.materialConsumption.forEach(mc => {
+                        const stateTags = mc.tags?.filter(tag => ['rough', 'precision', 'assembly', 'casing'].includes(tag)).sort() || [];
+                        const key = `${mc.itemId}-${stateTags.join(',')}`;
+                        const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
+                        materialBalance.set(key, {
+                          consumed: existing.consumed + mc.count,
+                          produced: existing.produced,
+                          tags: mc.tags,
+                          maxQuality: mc.maxQuality
+                        });
+                      });
+                    }
+                    
+                    // Track production  
+                    if (op.materialProduction) {
+                      op.materialProduction.forEach(mp => {
+                        const stateTags = mp.tags?.filter(tag => ['rough', 'precision', 'assembly', 'casing'].includes(tag)).sort() || [];
+                        const key = `${mp.itemId}-${stateTags.join(',')}`;
+                        const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
+                        materialBalance.set(key, {
+                          consumed: existing.consumed,
+                          produced: existing.produced + mp.count,
+                          tags: mp.tags,
+                          maxQuality: existing.maxQuality
+                        });
+                      });
+                    }
+                    
+                    // Legacy format: material_requirements
+                    if (op.material_requirements) {
+                      op.material_requirements.forEach(req => {
+                        const key = `${req.material_id}-${req.required_tags?.join(',') || 'any'}`;
+                        const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
+                        materialBalance.set(key, {
+                          consumed: existing.consumed + req.quantity,
+                          produced: existing.produced,
+                          tags: req.required_tags,
+                          maxQuality: req.max_quality
+                        });
+                      });
+                    }
+                  });
+                  
+                  // Only check materials with net consumption (consumed > produced)
+                  const netRequiredMaterials: Array<{
+                    material_id: string;
+                    quantity: number;
+                    required_tags?: string[];
+                    max_quality?: number;
+                  }> = [];
+                  for (const [key, balance] of materialBalance) {
+                    const netConsumption = balance.consumed - balance.produced;
+                    if (netConsumption > 0) {
+                      const itemId = key.split('-')[0];
+                      netRequiredMaterials.push({
+                        material_id: itemId,
+                        quantity: netConsumption,
+                        required_tags: balance.tags,
+                        max_quality: balance.maxQuality
+                      });
+                    }
                   }
                   
-                  const hasEnough = available >= quantity;
-                  if (!hasEnough) {
-                    const tagDisplay = requiredTags && requiredTags.length > 0 ? ` [${requiredTags.join(', ')}]` : '';
-                    const qualityDisplay = maxQuality !== undefined ? ` (≤${maxQuality}%)` : '';
-                    missingMaterials.push(`${quantity} ${materialId}${tagDisplay}${qualityDisplay} (have: ${available})`);
-                  }
-                  return hasEnough;
-                });
+                  // Check availability for legacy methods
+                  hasAllMaterials = netRequiredMaterials.every(mat => {
+                    const materialId = mat.material_id;
+                    const quantity = mat.quantity;
+                    const requiredTags = mat.required_tags;
+                    const maxQuality = mat.max_quality;
+                    
+                    let available: number;
+                    if (facility.inventory) {
+                      if (requiredTags && requiredTags.length > 0) {
+                        available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, materialId, requiredTags as ItemTag[], maxQuality);
+                      } else {
+                        available = inventoryManager.getAvailableQuantity(facility.inventory, materialId);
+                      }
+                    } else {
+                      available = facility.current_storage[materialId] || 0;
+                    }
+                    
+                    const hasEnough = available >= quantity;
+                    if (!hasEnough) {
+                      const tagDisplay = requiredTags && requiredTags.length > 0 ? ` [${requiredTags.join(', ')}]` : '';
+                      const qualityDisplay = maxQuality !== undefined ? ` (≤${maxQuality}%)` : '';
+                      missingMaterials.push(`${quantity} ${materialId}${tagDisplay}${qualityDisplay} (have: ${available})`);
+                    }
+                    return hasEnough;
+                  });
+                }
                 
                 return (
                   <div key={method.id} className="border border-gray-600 bg-gray-900">

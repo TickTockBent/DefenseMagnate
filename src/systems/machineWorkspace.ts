@@ -13,11 +13,14 @@ import {
   TagCategory,
   JobPriority,
   ItemInstance,
-  ItemTag
+  ItemTag,
+  ItemManufacturingType
 } from '../types'; // Using barrel exports
 import { TIME_SCALE, type GameTime } from '../utils/gameClock';
 import { inventoryManager } from '../utils/inventoryManager';
 import { createItemInstance } from '../utils/itemSystem';
+import { getBaseItem } from '../data/baseItems';
+import { ManufacturingV2Integration } from './manufacturingV2Integration';
 
 export class MachineWorkspaceManager {
   private workspaces: Map<string, MachineWorkspace> = new Map();
@@ -139,6 +142,13 @@ export class MachineWorkspaceManager {
       };
       workspace.machines.set(newEquipment.id, slot);
       console.log(`Added machine slot for new ${def.name} (${newEquipment.id})`);
+      
+      // AGGRESSIVE SCHEDULING: Immediately try to utilize the new equipment
+      const facilityData = this.getFacility(facility.id);
+      if (facilityData) {
+        console.log(`Aggressive scheduling: Re-evaluating job queue after adding ${def.name}`);
+        this.assignJobsFromQueue(workspace, facilityData);
+      }
     }
   }
   
@@ -180,6 +190,48 @@ export class MachineWorkspaceManager {
     const facility = this.facilities.get(facilityId);
     if (!facility) throw new Error('Facility not found');
     
+    // Check if this is a Manufacturing v2 method and generate dynamic workflow
+    const isManufacturingV2 = method.id.includes('v2') || method.name.includes('v2');
+    let actualMethod = method;
+    
+    if (isManufacturingV2) {
+      console.log(`Manufacturing v2 job detected: ${method.name} - generating dynamic workflow`);
+      
+      // Convert facility inventory to ItemInstance array for workflow generation
+      const facilityInventoryArray: ItemInstance[] = [];
+      if (facility.inventory) {
+        for (const group of facility.inventory.groups.values()) {
+          for (const slot of group.slots) {
+            for (const instance of slot.stack.instances) {
+              facilityInventoryArray.push(instance);
+            }
+          }
+        }
+      }
+      
+      try {
+        // Generate dynamic workflow based on actual facility inventory
+        actualMethod = ManufacturingV2Integration.generateDynamicMethod(
+          productId,
+          quantity,
+          [], // No specific input items for "forge new"
+          facilityInventoryArray
+        );
+        
+        // Preserve the original method identification
+        actualMethod.id = method.id;
+        actualMethod.name = method.name;
+        actualMethod.description = method.description;
+        
+        console.log(`Generated dynamic Manufacturing v2 workflow with ${actualMethod.operations.length} operations:`, 
+          actualMethod.operations.map(op => op.name));
+      } catch (error) {
+        console.error(`Failed to generate dynamic Manufacturing v2 workflow:`, error);
+        console.log(`Falling back to static method for job ${productId}`);
+        // Keep using the original method as fallback
+      }
+    }
+    
     // Create job inventory
     const jobInventory = inventoryManager.createEmptyInventory(100); // Small capacity for job
     
@@ -187,7 +239,7 @@ export class MachineWorkspaceManager {
       id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       facilityId,
       productId,
-      method,
+      method: actualMethod, // Use the dynamically generated method
       quantity,
       priority,
       rushOrder,
@@ -212,7 +264,83 @@ export class MachineWorkspaceManager {
     
     console.log(`Job ${job.id} added to facility queue for ${job.method.operations[0]?.name}`);
     
+    // AGGRESSIVE JOB DECOMPOSITION: For Manufacturing v2, create parallel sub-jobs
+    if (isManufacturingV2) {
+      this.decomposeJobIntoParallelOperations(job, workspace, facility);
+    }
+    
     return job;
+  }
+  
+  // AGGRESSIVE JOB DECOMPOSITION: Break down Manufacturing v2 jobs into parallel sub-jobs
+  private decomposeJobIntoParallelOperations(
+    parentJob: MachineSlotJob, 
+    workspace: MachineWorkspace, 
+    facility: Facility
+  ): void {
+    console.log(`Aggressive job decomposition: Analyzing job ${parentJob.id} for parallel opportunities`);
+    
+    // Only create sub-jobs for operations that can actually start now
+    // The rest will be created dynamically as materials become available
+    this.createDynamicParallelJobs(parentJob, workspace, facility);
+  }
+  
+  // Analyze operations to group them by type and identify dependencies
+  private analyzeOperationDependencies(operations: MachineOperation[]): Map<string, Array<{operation: MachineOperation, index: number}>> {
+    const groups = new Map<string, Array<{operation: MachineOperation, index: number}>>();
+    
+    // Group operations by their required machine type
+    operations.forEach((op, index) => {
+      const machineType = op.requiredTag.category;
+      if (!groups.has(machineType)) {
+        groups.set(machineType, []);
+      }
+      groups.get(machineType)!.push({ operation: op, index });
+    });
+    
+    return groups;
+  }
+  
+  // Create an independent sub-job that can run in parallel
+  private createIndependentSubJob(
+    parentJob: MachineSlotJob, 
+    operation: MachineOperation,
+    operationIndex: number
+  ): MachineSlotJob {
+    // Create a single-operation method
+    const subMethod: MachineBasedMethod = {
+      ...parentJob.method,
+      id: `${parentJob.method.id}_sub_${operationIndex}`,
+      name: `${operation.name} (Sub-job)`,
+      operations: [operation]
+    };
+    
+    // Create the sub-job
+    const subJob: MachineSlotJob = {
+      id: `${parentJob.id}_sub_${operationIndex}`,
+      facilityId: parentJob.facilityId,
+      productId: parentJob.productId,
+      method: subMethod,
+      quantity: parentJob.quantity,
+      priority: parentJob.priority,
+      rushOrder: parentJob.rushOrder,
+      state: 'queued',
+      createdAt: Date.now(),
+      currentOperationIndex: 0,
+      completedOperations: [],
+      
+      // Share the parent's inventory
+      jobInventory: parentJob.jobInventory,
+      operationProducts: parentJob.operationProducts,
+      consumedMaterials: parentJob.consumedMaterials || new Map(),
+      
+      // Mark as sub-job
+      isParallelOperation: true,
+      parentJobId: parentJob.id,
+      originalOperationIndex: operationIndex // Track which operation this was in the parent
+    };
+    
+    return subJob;
   }
   
   // Move materials from facility to job inventory
@@ -222,31 +350,58 @@ export class MachineWorkspaceManager {
       return;
     }
     
-    // Collect all materials needed for all operations
+    // Check if this is a Manufacturing v2 method (has "v2" in the name/id)
+    const isManufacturingV2 = job.method.id.includes('v2') || job.method.name.includes('v2');
+    
+    // Collect materials needed
     const materialsNeeded = new Map<string, { count: number; tags?: ItemTag[]; maxQuality?: number }>();
     
-    for (const operation of job.method.operations) {
-      if (operation.materialConsumption) {
-        // NEW: Use materialConsumption for component-based methods
-        for (const consumption of operation.materialConsumption) {
-          const key = `${consumption.itemId}-${consumption.tags?.join(',') || 'any'}`;
-          const existing = materialsNeeded.get(key);
-          materialsNeeded.set(key, {
-            count: (existing?.count || 0) + consumption.count * job.quantity,
-            tags: consumption.tags,
-            maxQuality: consumption.maxQuality
-          });
+    if (isManufacturingV2) {
+      // Manufacturing v2: Only reserve raw materials upfront, intermediate components created dynamically
+      console.log(`Manufacturing v2 job ${job.id}: Only reserving raw materials`);
+      
+      for (const operation of job.method.operations) {
+        if (operation.materialConsumption) {
+          for (const consumption of operation.materialConsumption) {
+            // Only reserve raw materials - check if item is raw material
+            const baseItem = getBaseItem(consumption.itemId);
+            if (baseItem?.manufacturingType === ItemManufacturingType.RAW_MATERIAL) {
+              const key = `${consumption.itemId}-${consumption.tags?.join(',') || 'any'}`;
+              const existing = materialsNeeded.get(key);
+              materialsNeeded.set(key, {
+                count: (existing?.count || 0) + consumption.count * job.quantity,
+                tags: consumption.tags,
+                maxQuality: consumption.maxQuality
+              });
+            }
+          }
         }
-      } else if (operation.material_requirements) {
-        // LEGACY: Support old material_requirements format
-        for (const req of operation.material_requirements) {
-          const key = `${req.material_id}-${req.required_tags?.join(',') || 'any'}`;
-          const existing = materialsNeeded.get(key);
-          materialsNeeded.set(key, {
-            count: (existing?.count || 0) + req.quantity * job.quantity,
-            tags: req.required_tags,
-            maxQuality: req.max_quality
-          });
+      }
+    } else {
+      // Legacy methods: Reserve all materials upfront
+      console.log(`Legacy job ${job.id}: Reserving all materials`);
+      
+      for (const operation of job.method.operations) {
+        if (operation.materialConsumption) {
+          for (const consumption of operation.materialConsumption) {
+            const key = `${consumption.itemId}-${consumption.tags?.join(',') || 'any'}`;
+            const existing = materialsNeeded.get(key);
+            materialsNeeded.set(key, {
+              count: (existing?.count || 0) + consumption.count * job.quantity,
+              tags: consumption.tags,
+              maxQuality: consumption.maxQuality
+            });
+          }
+        } else if (operation.material_requirements) {
+          for (const req of operation.material_requirements) {
+            const key = `${req.material_id}-${req.required_tags?.join(',') || 'any'}`;
+            const existing = materialsNeeded.get(key);
+            materialsNeeded.set(key, {
+              count: (existing?.count || 0) + req.quantity * job.quantity,
+              tags: req.required_tags,
+              maxQuality: req.max_quality
+            });
+          }
         }
       }
     }
@@ -304,6 +459,7 @@ export class MachineWorkspaceManager {
   // Check if operation can start (materials available in job inventory)
   private canStartOperation(job: MachineSlotJob, facility: Facility): boolean {
     const operation = job.method.operations[job.currentOperationIndex];
+    const isManufacturingV2 = job.method.id.includes('v2') || job.method.name.includes('v2');
     
     // NEW: Check materialConsumption first
     if (operation.materialConsumption) {
@@ -311,19 +467,52 @@ export class MachineWorkspaceManager {
         const needed = consumption.count * job.quantity;
         let available: number;
         
-        if (consumption.tags && consumption.tags.length > 0) {
-          available = inventoryManager.getAvailableQuantityWithTags(
-            job.jobInventory, 
-            consumption.itemId, 
-            consumption.tags, 
-            consumption.maxQuality
-          );
+        // For Manufacturing v2, check both job inventory AND facility inventory for raw materials
+        if (isManufacturingV2) {
+          const baseItem = getBaseItem(consumption.itemId);
+          const isRawMaterial = baseItem?.manufacturingType === ItemManufacturingType.RAW_MATERIAL;
+          
+          // Check job inventory first
+          if (consumption.tags && consumption.tags.length > 0) {
+            available = inventoryManager.getAvailableQuantityWithTags(
+              job.jobInventory, 
+              consumption.itemId, 
+              consumption.tags, 
+              consumption.maxQuality
+            );
+          } else {
+            available = inventoryManager.getAvailableQuantity(job.jobInventory, consumption.itemId);
+          }
+          
+          // If not enough in job inventory and it's a raw material, check facility inventory
+          if (available < needed && isRawMaterial && facility.inventory) {
+            const facilityAvailable = consumption.tags && consumption.tags.length > 0
+              ? inventoryManager.getAvailableQuantityWithTags(
+                  facility.inventory,
+                  consumption.itemId,
+                  consumption.tags,
+                  consumption.maxQuality
+                )
+              : inventoryManager.getAvailableQuantity(facility.inventory, consumption.itemId);
+              
+            available += facilityAvailable;
+          }
         } else {
-          available = inventoryManager.getAvailableQuantity(job.jobInventory, consumption.itemId);
+          // Legacy: Only check job inventory
+          if (consumption.tags && consumption.tags.length > 0) {
+            available = inventoryManager.getAvailableQuantityWithTags(
+              job.jobInventory, 
+              consumption.itemId, 
+              consumption.tags, 
+              consumption.maxQuality
+            );
+          } else {
+            available = inventoryManager.getAvailableQuantity(job.jobInventory, consumption.itemId);
+          }
         }
         
         if (available < needed) {
-          console.log(`Job ${job.id} lacks materials: need ${needed} ${consumption.itemId}, have ${available}`);
+          console.log(`Job ${job.id} lacks materials: need ${needed} ${consumption.itemId}, have ${available} (${isManufacturingV2 ? 'Manufacturing v2' : 'Legacy'})`);
           return false;
         }
       }
@@ -333,8 +522,6 @@ export class MachineWorkspaceManager {
     // LEGACY: Check old material_requirements format
     if (operation.material_requirements) {
       for (const mat of operation.material_requirements) {
-        // For legacy operations, we no longer check consumed_at_start
-        // All materials should now be in the job inventory
         const needed = mat.quantity * job.quantity;
         let available: number;
         
@@ -362,9 +549,59 @@ export class MachineWorkspaceManager {
   // Consume materials for current operation (from job inventory)
   private consumeOperationMaterials(job: MachineSlotJob, facility: Facility): void {
     const operation = job.method.operations[job.currentOperationIndex];
+    const isManufacturingV2 = job.method.id.includes('v2') || job.method.name.includes('v2');
     
-    // This function now only handles consumption at operation START
-    // Material consumption is now handled in completeOperation when materials are transformed
+    // Manufacturing v2: Pull raw materials from facility if needed
+    if (isManufacturingV2 && operation.materialConsumption) {
+      for (const consumption of operation.materialConsumption) {
+        const needed = consumption.count * job.quantity;
+        const baseItem = getBaseItem(consumption.itemId);
+        const isRawMaterial = baseItem?.manufacturingType === ItemManufacturingType.RAW_MATERIAL;
+        
+        // Check how much we have in job inventory
+        let inJobInventory: number;
+        if (consumption.tags && consumption.tags.length > 0) {
+          inJobInventory = inventoryManager.getAvailableQuantityWithTags(
+            job.jobInventory,
+            consumption.itemId,
+            consumption.tags,
+            consumption.maxQuality
+          );
+        } else {
+          inJobInventory = inventoryManager.getAvailableQuantity(job.jobInventory, consumption.itemId);
+        }
+        
+        // If we need more and it's a raw material, pull from facility
+        if (inJobInventory < needed && isRawMaterial && facility.inventory) {
+          const stillNeeded = needed - inJobInventory;
+          
+          let itemsToMove: ItemInstance[];
+          if (consumption.tags && consumption.tags.length > 0) {
+            itemsToMove = inventoryManager.getBestQualityItemsWithTags(
+              facility.inventory,
+              consumption.itemId,
+              stillNeeded,
+              consumption.tags,
+              consumption.maxQuality
+            );
+          } else {
+            itemsToMove = inventoryManager.getBestQualityItems(
+              facility.inventory,
+              consumption.itemId,
+              stillNeeded
+            );
+          }
+          
+          // Move items from facility to job
+          for (const item of itemsToMove) {
+            inventoryManager.removeItem(facility.inventory, item.id, item.quantity);
+            inventoryManager.addItem(job.jobInventory, item);
+          }
+          
+          console.log(`Manufacturing v2 job ${job.id} pulled ${itemsToMove.length} ${consumption.itemId} from facility`);
+        }
+      }
+    }
     
     // For backwards compatibility with old operations that still use consumed_at_start: true
     if (operation.material_requirements) {
@@ -475,7 +712,7 @@ export class MachineWorkspaceManager {
     
     if (idleMachines.length === 0) return; // No idle machines
     
-    // Try to assign jobs from the queue
+    // AGGRESSIVE SCHEDULING: First pass - try to assign current operations
     for (let i = workspace.jobQueue.length - 1; i >= 0; i--) {
       const job = workspace.jobQueue[i];
       
@@ -501,6 +738,177 @@ export class MachineWorkspaceManager {
         if (idleMachines.length === 0) break;
       }
     }
+    
+    // AGGRESSIVE SCHEDULING: Second pass - look for parallel operations within active jobs
+    if (idleMachines.length > 0) {
+      this.findParallelOperations(workspace, facility, idleMachines);
+    }
+  }
+  
+  // AGGRESSIVE SCHEDULING: Find parallel operations that can be started
+  private findParallelOperations(
+    workspace: MachineWorkspace, 
+    facility: Facility, 
+    idleMachines: MachineSlot[]
+  ): void {
+    console.log(`Aggressive scheduling: Looking for parallel operations with ${idleMachines.length} idle machines`);
+    
+    // Look through all active jobs to see if we can start future operations in parallel
+    const activeJobs = Array.from(workspace.machines.values())
+      .map(machine => machine.currentJob)
+      .filter(job => job !== undefined) as MachineSlotJob[];
+    
+    for (const activeJob of activeJobs) {
+      if (idleMachines.length === 0) break;
+      
+      // Check if this is a Manufacturing v2 job with multiple operations
+      const isManufacturingV2 = activeJob.method.id.includes('v2') || activeJob.method.name.includes('v2');
+      if (!isManufacturingV2) continue;
+      
+      // Look for upcoming operations that could be started in parallel
+      for (let futureOpIndex = activeJob.currentOperationIndex + 1; 
+           futureOpIndex < activeJob.method.operations.length; 
+           futureOpIndex++) {
+        
+        const futureOperation = activeJob.method.operations[futureOpIndex];
+        
+        // Check if we have a machine that can handle this future operation
+        const suitableMachine = this.findMachineForOperation(futureOperation, idleMachines, facility);
+        if (!suitableMachine) continue;
+        
+        // Check if the future operation can start (has required materials)
+        if (this.canStartFutureOperation(activeJob, futureOpIndex, facility)) {
+          console.log(`Aggressive scheduling: Starting parallel operation ${futureOperation.name} for job ${activeJob.id}`);
+          
+          // Create a sub-job for this parallel operation
+          const parallelJob = this.createParallelJob(activeJob, futureOpIndex);
+          
+          // Start the parallel operation
+          this.startJobOnMachine(parallelJob, suitableMachine, facility);
+          
+          // Remove machine from idle list
+          const machineIndex = idleMachines.indexOf(suitableMachine);
+          if (machineIndex > -1) {
+            idleMachines.splice(machineIndex, 1);
+          }
+          
+          break; // Only start one parallel operation per job for now
+        }
+      }
+    }
+  }
+  
+  // Find a machine that can handle a specific operation
+  private findMachineForOperation(
+    operation: any, // MachineOperation
+    availableMachines: MachineSlot[],
+    facility: Facility
+  ): MachineSlot | null {
+    for (const machine of availableMachines) {
+      const equipment = facility.equipment.find(e => e.id === machine.machineId);
+      if (!equipment) continue;
+      
+      const def = this.equipmentDefinitions.get(equipment.equipmentId);
+      if (!def) continue;
+      
+      // Check if machine provides required tag
+      const providesTag = def.tags.some(tag => {
+        if (tag.category !== operation.requiredTag.category) return false;
+        
+        if (typeof operation.requiredTag.minimum === 'boolean') {
+          return tag.value === true;
+        } else {
+          return typeof tag.value === 'number' && tag.value >= operation.requiredTag.minimum;
+        }
+      });
+      
+      if (providesTag) {
+        return machine;
+      }
+    }
+    
+    return null;
+  }
+  
+  // Check if a future operation can start (has required materials available)
+  private canStartFutureOperation(job: MachineSlotJob, operationIndex: number, facility: Facility): boolean {
+    const operation = job.method.operations[operationIndex];
+    
+    // For now, only check if this operation produces materials that don't already exist
+    // This is a simplified check - a full implementation would trace dependency chains
+    if (operation.materialProduction) {
+      for (const production of operation.materialProduction) {
+        // Check if we already have these materials in job inventory
+        const available = inventoryManager.getAvailableQuantity(job.jobInventory, production.itemId);
+        if (available > 0) {
+          return false; // Already have this material, don't duplicate
+        }
+      }
+    }
+    
+    // Check if materials are available (similar to canStartOperation but for future op)
+    if (operation.materialConsumption) {
+      for (const consumption of operation.materialConsumption) {
+        const needed = consumption.count * job.quantity;
+        let available: number;
+        
+        if (consumption.tags && consumption.tags.length > 0) {
+          available = inventoryManager.getAvailableQuantityWithTags(
+            job.jobInventory,
+            consumption.itemId,
+            consumption.tags,
+            consumption.maxQuality
+          );
+        } else {
+          available = inventoryManager.getAvailableQuantity(job.jobInventory, consumption.itemId);
+        }
+        
+        if (available < needed) {
+          return false; // Not enough materials
+        }
+      }
+    }
+    
+    return true;
+  }
+  
+  // Create a parallel job for a specific operation
+  private createParallelJob(parentJob: MachineSlotJob, operationIndex: number): MachineSlotJob {
+    const operation = parentJob.method.operations[operationIndex];
+    
+    // Create a focused method with just this operation
+    const parallelMethod: MachineBasedMethod = {
+      ...parentJob.method,
+      id: `${parentJob.method.id}_parallel_${operationIndex}`,
+      name: `${operation.name} (Parallel)`,
+      operations: [operation]
+    };
+    
+    // Create parallel job that shares the parent's inventory
+    const parallelJob: MachineSlotJob = {
+      id: `${parentJob.id}_parallel_${operationIndex}`,
+      facilityId: parentJob.facilityId,
+      productId: parentJob.productId,
+      method: parallelMethod,
+      quantity: parentJob.quantity,
+      priority: parentJob.priority,
+      rushOrder: parentJob.rushOrder,
+      state: 'queued',
+      createdAt: Date.now(),
+      currentOperationIndex: 0,
+      completedOperations: [],
+      
+      // Share inventory with parent job
+      jobInventory: parentJob.jobInventory,
+      operationProducts: parentJob.operationProducts,
+      consumedMaterials: parentJob.consumedMaterials || new Map(),
+      
+      // Mark as parallel operation
+      isParallelOperation: true,
+      parentJobId: parentJob.id
+    };
+    
+    return parallelJob;
   }
   
   // Find an available machine that can handle the job's current operation
@@ -587,6 +995,12 @@ export class MachineWorkspaceManager {
       job.currentOperationIndex++;
       
       console.log(`Job ${job.id} completed operation: ${operation.name}`);
+      
+      // AGGRESSIVE SCHEDULING: Check if this completion unlocks new parallel opportunities
+      if (operation.materialProduction && operation.materialProduction.length > 0) {
+        console.log(`Operation produced materials, checking for new parallel opportunities`);
+        this.checkForNewParallelOpportunities(workspace, facility, job);
+      }
     }
     
     // Clear machine
@@ -594,9 +1008,15 @@ export class MachineWorkspaceManager {
     machine.currentProgress = undefined;
     job.currentMachineId = undefined;
     
-    // Check if job is complete or needs next operation
-    if (job.currentOperationIndex >= job.method.operations.length) {
-      // Job complete! Move any remaining items from job inventory to facility
+    // Check if this is a sub-job
+    if (job.isParallelOperation && job.parentJobId) {
+      // Sub-job complete, just mark it as completed
+      job.state = 'completed';
+      job.completedAt = this.currentGameTime.totalGameHours;
+      workspace.completedJobs.push(job);
+      console.log(`Sub-job ${job.id} completed!`);
+    } else if (job.currentOperationIndex >= job.method.operations.length) {
+      // Main job complete! Move any remaining items from job inventory to facility
       this.finalizeJobInventory(job, facility);
       
       job.state = 'completed';
@@ -616,6 +1036,110 @@ export class MachineWorkspaceManager {
       this.addJobToQueue(workspace, job);
       console.log(`Job ${job.id} returned to queue for next operation: ${job.method.operations[job.currentOperationIndex]?.name}`);
     }
+  }
+  
+  // AGGRESSIVE SCHEDULING: Check if newly produced materials unlock parallel operations
+  private checkForNewParallelOpportunities(
+    workspace: MachineWorkspace,
+    facility: Facility,
+    completedJob: MachineSlotJob
+  ): void {
+    // Find all jobs that share the same inventory (main job and its sub-jobs)
+    const relatedJobs = [
+      ...workspace.jobQueue,
+      ...Array.from(workspace.machines.values())
+        .map(m => m.currentJob)
+        .filter(j => j !== undefined)
+    ].filter(job => 
+      job && (
+        job.jobInventory === completedJob.jobInventory ||
+        job.id === completedJob.parentJobId ||
+        job.parentJobId === completedJob.parentJobId
+      )
+    ) as MachineSlotJob[];
+    
+    // Find idle machines
+    const idleMachines = Array.from(workspace.machines.values()).filter(machine => !machine.currentJob);
+    if (idleMachines.length === 0) return;
+    
+    // Check each related job to see if any operations can now start
+    for (const job of relatedJobs) {
+      if (job.state !== 'queued') continue;
+      
+      // For main jobs, check if the current operation can now start
+      if (!job.isParallelOperation && this.canStartOperation(job, facility)) {
+        const suitableMachine = this.findAvailableMachineForJob(job, idleMachines, facility);
+        if (suitableMachine) {
+          // Remove from queue and start
+          const queueIndex = workspace.jobQueue.indexOf(job);
+          if (queueIndex > -1) {
+            workspace.jobQueue.splice(queueIndex, 1);
+          }
+          
+          this.startJobOnMachine(job, suitableMachine, facility);
+          
+          // Remove machine from idle list
+          const machineIndex = idleMachines.indexOf(suitableMachine);
+          if (machineIndex > -1) {
+            idleMachines.splice(machineIndex, 1);
+          }
+          
+          console.log(`Newly produced materials allowed job ${job.id} to start on ${suitableMachine.machineId}`);
+          
+          if (idleMachines.length === 0) break;
+        }
+      }
+    }
+    
+    // Also create new sub-jobs for any operations that can now run in parallel
+    const mainJob = completedJob.parentJobId 
+      ? relatedJobs.find(j => j.id === completedJob.parentJobId)
+      : completedJob;
+    
+    if (mainJob && !mainJob.isParallelOperation) {
+      this.createDynamicParallelJobs(mainJob, workspace, facility);
+    }
+  }
+  
+  // Create parallel jobs dynamically as materials become available
+  private createDynamicParallelJobs(
+    mainJob: MachineSlotJob,
+    workspace: MachineWorkspace,
+    facility: Facility
+  ): void {
+    // Find operations that haven't been started yet
+    const pendingOperations = mainJob.method.operations
+      .map((op, index) => ({ operation: op, index }))
+      .filter(({ index }) => {
+        // Skip completed operations
+        if (index <= mainJob.currentOperationIndex) return false;
+        
+        // Skip operations that already have sub-jobs
+        const hasSubJob = workspace.jobQueue.some(job => 
+          job.parentJobId === mainJob.id && 
+          job.originalOperationIndex === index
+        ) || Array.from(workspace.machines.values()).some(machine =>
+          machine.currentJob?.parentJobId === mainJob.id &&
+          machine.currentJob?.originalOperationIndex === index
+        );
+        
+        return !hasSubJob;
+      });
+    
+    // Check which operations can start now
+    for (const { operation, index } of pendingOperations) {
+      // Create a temporary sub-job to test if it can start
+      const testJob = this.createIndependentSubJob(mainJob, operation, index);
+      
+      if (this.canStartOperation(testJob, facility)) {
+        // This operation can start! Add it to the queue
+        this.addJobToQueue(workspace, testJob);
+        console.log(`Created dynamic sub-job for ${operation.name} now that materials are available`);
+      }
+    }
+    
+    // Try to assign any new jobs immediately
+    this.assignJobsFromQueue(workspace, facility);
   }
   
   // Set facility reference for workspace operations

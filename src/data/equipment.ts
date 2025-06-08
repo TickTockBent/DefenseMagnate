@@ -127,6 +127,7 @@ export const millManual = createEquipment({
   tags: [
     { category: TagCategory.MILLING, value: 10, unit: '%', consumable: true },
     { category: TagCategory.DRILLING, value: 15, unit: '%', consumable: true },
+    { category: TagCategory.BORING, value: 8, unit: '%', consumable: true },
     { category: TagCategory.MANUAL, value: true }
   ],
   footprint: 3,

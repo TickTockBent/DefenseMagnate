@@ -137,6 +137,11 @@ export interface MachineSlotJob {
   // Material tracking (for legacy compatibility)
   consumedMaterials?: Map<string, number>;
   finalQuality?: number;
+  
+  // Parallel operation support (NEW)
+  isParallelOperation?: boolean; // True if this job is a parallel sub-operation
+  parentJobId?: string; // ID of parent job if this is a parallel operation
+  originalOperationIndex?: number; // Which operation index this was in the parent job
 }
 
 // LEGACY - Comment out after migration

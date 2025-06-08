@@ -20,11 +20,15 @@ export class GapAnalyzer {
     availableInventory: ItemInstance[],
     inputAnalysis: ConditionAnalysis[]
   ): ComponentGap[] {
+    console.log(`GapAnalyzer: Calculating gaps for ${targetProductId} (quantity: ${targetQuantity})`);
     const baseItem = getBaseItem(targetProductId);
     
     if (!baseItem || !baseItem.assemblyComponents) {
       throw new Error(`${targetProductId} is not a valid assembly item`);
     }
+    
+    console.log(`GapAnalyzer: ${targetProductId} has ${baseItem.assemblyComponents.length} assembly components:`, 
+      baseItem.assemblyComponents.map(comp => `${comp.componentId} (${comp.quantity})`));
     
     const gaps: ComponentGap[] = [];
     
@@ -36,9 +40,11 @@ export class GapAnalyzer {
         availableInventory,
         inputAnalysis
       );
+      console.log(`GapAnalyzer: Gap for ${requirement.componentId}: required=${gap.required}, available=${gap.available}, needToManufacture=${gap.needToManufacture}`);
       gaps.push(gap);
     }
     
+    console.log(`GapAnalyzer: Total gaps calculated: ${gaps.length}`);
     return gaps;
   }
   
@@ -56,17 +62,17 @@ export class GapAnalyzer {
     // Calculate available components in inventory
     const available = this.countAvailableComponents(
       requirement.componentId,
+      availableInventory,
       requirement.requiredTags,
-      requirement.maxQuality,
-      availableInventory
+      requirement.maxQuality
     );
     
     // Calculate recoverable components from input analysis
     const recoverable = this.countRecoverableComponents(
       requirement.componentId,
+      inputAnalysis,
       requirement.requiredTags,
-      requirement.maxQuality,
-      inputAnalysis
+      requirement.maxQuality
     );
     
     const needToManufacture = Math.max(0, totalRequired - available - recoverable);
@@ -85,9 +91,9 @@ export class GapAnalyzer {
    */
   private static countAvailableComponents(
     componentId: string,
+    inventory: ItemInstance[],
     requiredTags?: ItemTag[],
-    maxQuality?: number,
-    inventory: ItemInstance[]
+    maxQuality?: number
   ): number {
     return inventory
       .filter(item => item.baseItemId === componentId)
@@ -100,9 +106,9 @@ export class GapAnalyzer {
    */
   private static countRecoverableComponents(
     componentId: string,
+    inputAnalysis: ConditionAnalysis[],
     requiredTags?: ItemTag[],
-    maxQuality?: number,
-    inputAnalysis: ConditionAnalysis[]
+    maxQuality?: number
   ): number {
     let totalRecoverable = 0;
     

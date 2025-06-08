@@ -140,7 +140,8 @@ export class ManufacturingRulesEngine {
     const issues: string[] = [];
     const baseItems = require('../data/baseItems').baseItems;
     
-    for (const [itemId, item] of Object.entries(baseItems)) {
+    for (const [itemId, itemData] of Object.entries(baseItems)) {
+      const item = itemData as any; // Type assertion for baseItems values
       // Check if assemblies have valid component references
       if (item.manufacturingType === ItemManufacturingType.ASSEMBLY && item.assemblyComponents) {
         for (const component of item.assemblyComponents) {
@@ -178,7 +179,7 @@ export class ManufacturingRulesEngine {
     const baseItems = require('../data/baseItems').baseItems;
     
     return Object.entries(baseItems)
-      .filter(([_, item]) => item.manufacturingType === type)
+      .filter(([_, itemData]) => (itemData as any).manufacturingType === type)
       .map(([itemId, _]) => itemId);
   }
 }

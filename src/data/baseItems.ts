@@ -111,47 +111,103 @@ export const baseItems: Record<string, BaseItem> = {
     materialSource: 'steel'
   },
   
-  // NEW: Component-based manufacturing items - Tier 2: Shaped materials
-  'mechanical-component': {
-    id: 'mechanical-component',
-    name: 'Mechanical Component',
+  // Manufacturing v2 Clean Hierarchy - Tier 2: Shaped Materials
+  
+  // Basic intermediate materials from raw materials
+  'small-steel-billet': {
+    id: 'small-steel-billet',
+    name: 'Small Steel Billet',
     category: ItemCategory.COMPONENT,
-    baseValue: 5,
-    description: 'Basic mechanical component differentiated by manufacturing state',
+    baseValue: 2,
+    description: 'Small formed steel billet ready for machining',
     stackable: true,
     defaultTags: [],
     manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
     materialSource: 'steel'
   },
   
-  'mechanical-assembly': {
-    id: 'mechanical-assembly',
-    name: 'Mechanical Assembly',
+  'small-steel-cylinder': {
+    id: 'small-steel-cylinder',
+    name: 'Small Steel Cylinder',
     category: ItemCategory.COMPONENT,
-    baseValue: 50,
-    description: 'Combined mechanical components forming a sub-assembly',
+    baseValue: 2,
+    description: 'Small turned steel cylinder for further processing',
     stackable: true,
     defaultTags: [],
-    manufacturingType: ItemManufacturingType.ASSEMBLY,
-    assemblyComponents: [
-      { componentId: 'mechanical-component', quantity: 5, requiredTags: [ItemTag.ROUGH] },
-      { componentId: 'mechanical-component', quantity: 5, requiredTags: [ItemTag.PRECISION] }
-    ]
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'steel'
   },
   
-  'plastic-casing': {
-    id: 'plastic-casing',
-    name: 'Plastic Casing',
+  // Processed components from intermediate materials
+  'mechanical-component': {
+    id: 'mechanical-component',
+    name: 'Mechanical Component',
     category: ItemCategory.COMPONENT,
-    baseValue: 10,
-    description: 'Molded plastic housing for external protection',
+    baseValue: 5,
+    description: 'Basic mechanical component with rough finishing',
+    stackable: true,
+    defaultTags: [ItemTag.ROUGH, ItemTag.LOW_TECH],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'small-steel-billet'
+  },
+  
+  'small-tube': {
+    id: 'small-tube',
+    name: 'Small Tube',
+    category: ItemCategory.COMPONENT,
+    baseValue: 8,
+    description: 'Small bored tube for mechanical assemblies',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'small-steel-cylinder'
+  },
+  
+  'small-casing': {
+    id: 'small-casing',
+    name: 'Small Casing',
+    category: ItemCategory.COMPONENT,
+    baseValue: 3,
+    description: 'Small plastic casing for external protection',
     stackable: true,
     defaultTags: [],
     manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
     materialSource: 'plastic'
   },
   
-  // Scrap materials from restoration - Tier 1: Raw materials (even though recovered)
+  // Manufacturing v2 Clean Hierarchy - Tier 3: Assemblies
+  
+  'mechanical-assembly': {
+    id: 'mechanical-assembly',
+    name: 'Mechanical Assembly',
+    category: ItemCategory.COMPONENT,
+    baseValue: 60,
+    description: 'Assembly of mechanical components with low-tech finish',
+    stackable: true,
+    defaultTags: [ItemTag.LOW_TECH],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'mechanical-component', quantity: 10, requiredTags: [ItemTag.ROUGH, ItemTag.LOW_TECH] }
+    ]
+  },
+  
+  basic_sidearm: {
+    id: 'basic_sidearm',
+    name: 'Basic Sidearm',
+    category: ItemCategory.PRODUCT,
+    baseValue: 180,
+    description: 'Standard-issue sidearm pistol with low-tech components',
+    stackable: false,
+    defaultTags: [ItemTag.LOW_TECH],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'mechanical-assembly', quantity: 1, requiredTags: [ItemTag.LOW_TECH] },
+      { componentId: 'small-tube', quantity: 1 },
+      { componentId: 'small-casing', quantity: 1 }
+    ]
+  },
+  
+  // Legacy materials for migration support
   'plastic-scrap': {
     id: 'plastic-scrap',
     name: 'Plastic Scrap',
@@ -172,22 +228,6 @@ export const baseItems: Record<string, BaseItem> = {
     stackable: true,
     defaultTags: [],
     manufacturingType: ItemManufacturingType.RAW_MATERIAL
-  },
-  
-  // Finished Products - Tier 3: Assemblies (CAN be disassembled)
-  basic_sidearm: {
-    id: 'basic_sidearm',
-    name: 'Basic Sidearm',
-    category: ItemCategory.PRODUCT,
-    baseValue: 180,
-    description: 'Standard-issue sidearm pistol, reliable and effective',
-    stackable: false,
-    defaultTags: [],
-    manufacturingType: ItemManufacturingType.ASSEMBLY,
-    assemblyComponents: [
-      { componentId: 'mechanical-assembly', quantity: 1, requiredTags: [ItemTag.ASSEMBLY] },
-      { componentId: 'plastic-casing', quantity: 1, requiredTags: [ItemTag.CASING] }
-    ]
   },
   
   tactical_knife: {
