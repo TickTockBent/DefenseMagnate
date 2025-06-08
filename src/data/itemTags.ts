@@ -249,7 +249,7 @@ export function isValidTag(tag: string): tag is ItemTag {
 
 export function getCompatibleTags(itemCategory: string): ItemTag[] {
   // All items can have condition tags
-  let compatibleTags = [...getConditionTags()];
+  const compatibleTags = [...getConditionTags()];
   
   // Materials can have material grade tags
   if (itemCategory === 'material') {

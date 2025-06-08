@@ -1,4 +1,6 @@
-// Helper to upgrade old manufacturing steps to include required_tags
+// LEGACY: Helper to upgrade old manufacturing steps to include required_tags
+// SUPERSEDED BY: Component-based manufacturing system
+// This file is maintained for potential migration needs but not actively used
 
 import { TagCategory, ManufacturingStep } from '../types';
 

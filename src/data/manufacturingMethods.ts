@@ -1,8 +1,7 @@
 // Manufacturing Methods with Single-Machine Operations
 
 import { 
-  MachineBasedMethod, 
-  MachineOperation,
+  MachineBasedMethod,
   TagCategory,
   ItemTag
 } from '../types';

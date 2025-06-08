@@ -1,7 +1,7 @@
 // Machine Workspace View - Shows machines with job slots
 
 import { useGameStore } from '../state/gameStoreWithEquipment';
-import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility } from '../types';
+import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility, ItemTag } from '../types';
 import { Equipment, EquipmentInstance } from '../types';
 import { formatGameTime } from '../utils/gameClock';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -260,7 +260,15 @@ function JobInventoryDisplay({ job }: { job: MachineSlotJob }) {
         <div className="ml-3 mt-1 space-y-1">
           {inventoryItems.map((item, idx) => (
             <div key={idx} className="text-xs text-gray-400">
-              • {item.quantity}x {getDisplayName({ baseItemId: item.baseItemId, tags: item.tags, quality: item.quality } as any)}
+              • {item.quantity}x {getDisplayName({ 
+                id: `temp-${idx}`, 
+                baseItemId: item.baseItemId, 
+                tags: item.tags as ItemTag[], 
+                quality: item.quality,
+                quantity: item.quantity,
+                acquiredAt: 0,
+                lastModified: 0
+              })}
               <span className="text-gray-600 ml-1">
                 ({getQualityDescription(item.quality)})
               </span>
@@ -338,10 +346,10 @@ function OperationFlowDisplay({ job }: { job: MachineSlotJob }) {
 
 interface UnifiedJobListProps {
   workspace: MachineWorkspace;
-  allJobs: MachineSlotJob[];
+  allJobs: MachineSlotJob[]; // LEGACY: Not used in current implementation, jobs come from workspace
 }
 
-function UnifiedJobList({ workspace, allJobs }: UnifiedJobListProps) {
+function UnifiedJobList({ workspace }: UnifiedJobListProps) {
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
   const cancelMachineJob = useGameStore(state => state.cancelMachineJob);
@@ -617,7 +625,6 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
   const [showMethodDetails, setShowMethodDetails] = useState<string | null>(null);
   const [startingJob, setStartingJob] = useState<string | null>(null);
   const startMachineJob = useGameStore(state => state.startMachineJob);
-  const workspace = useGameStore(state => state.machineWorkspace);
   
   const handleStartJob = (facilityId: string, productId: string, methodId: string, quantity: number) => {
     // Show immediate feedback for just this method
@@ -716,7 +723,12 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                 });
                 
                 // Only check materials with net consumption (consumed > produced)
-                const netRequiredMaterials: any[] = [];
+                const netRequiredMaterials: Array<{
+                  material_id: string;
+                  quantity: number;
+                  required_tags?: string[];
+                  max_quality?: number;
+                }> = [];
                 for (const [key, balance] of materialBalance) {
                   const netConsumption = balance.consumed - balance.produced;
                   if (netConsumption > 0) {
@@ -743,7 +755,7 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                   let available: number;
                   if (facility.inventory) {
                     if (requiredTags && requiredTags.length > 0) {
-                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, materialId, requiredTags, maxQuality);
+                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, materialId, requiredTags as ItemTag[], maxQuality);
                     } else {
                       available = inventoryManager.getAvailableQuantity(facility.inventory, materialId);
                     }
@@ -850,7 +862,7 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                                   let available: number;
                                   if (facility.inventory) {
                                     if (mat.required_tags && mat.required_tags.length > 0) {
-                                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags, mat.max_quality);
+                                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags as ItemTag[], mat.max_quality);
                                     } else {
                                       available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
                                     }

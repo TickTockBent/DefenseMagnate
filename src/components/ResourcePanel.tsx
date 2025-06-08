@@ -1,6 +1,6 @@
 import { useGameStore } from '../state/gameStoreWithEquipment'
 import { useState } from 'react'
-import { ItemCategory, ItemInstance } from '../types'
+import { ItemInstance } from '../types'
 import { getDisplayName, getQualityDescription } from '../utils/itemSystem'
 import { baseItems } from '../data/baseItems'
 
