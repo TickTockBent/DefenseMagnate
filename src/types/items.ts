@@ -1,6 +1,8 @@
 // Unified Item System Types
 // Replaces fragmented item variants with base items + tags + quality
 
+import { ItemManufacturingType } from './manufacturing';
+
 export enum ItemCategory {
   MATERIAL = 'material',
   PRODUCT = 'product', 
@@ -46,6 +48,17 @@ export interface BaseItem {
   description: string;          // Item description
   stackable: boolean;           // Can multiple instances be combined
   defaultTags: ItemTag[];       // Tags that are always present
+  manufacturingType: ItemManufacturingType; // Manufacturing v2: hierarchy classification
+  materialSource?: string;      // For shaped materials: which raw material they come from
+  assemblyComponents?: ComponentRequirement[]; // For assemblies: what parts they need
+}
+
+// Component requirement for assemblies
+export interface ComponentRequirement {
+  componentId: string;
+  quantity: number;
+  requiredTags?: ItemTag[];
+  maxQuality?: number;
 }
 
 export interface TagEffect {

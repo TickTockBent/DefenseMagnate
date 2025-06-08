@@ -20,6 +20,27 @@ export type {
   LaborSkill
 } from './manufacturing';
 
+// Manufacturing v2 types
+export {
+  ItemManufacturingType,
+  OperationType
+} from './manufacturing';
+
+export type {
+  ManufacturingRule,
+  ComponentRecovery,
+  TreatmentOperation,
+  ConditionAnalysis,
+  RecoveryRisk,
+  ComponentGap,
+  DynamicOperation,
+  ManufacturingPlan,
+  Enhancement,
+  EnhancementRequirement,
+  EnhancementEffect,
+  EnhancementCost
+} from './manufacturing';
+
 export type {
   ProductionJob,
   ProductionQueue,

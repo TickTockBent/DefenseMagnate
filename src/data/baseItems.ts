@@ -1,10 +1,10 @@
 // Base Items Database
 // Standardized item definitions for unified material system
 
-import { BaseItem, ItemCategory } from '../types';
+import { BaseItem, ItemCategory, ItemManufacturingType, ItemTag } from '../types';
 
 export const baseItems: Record<string, BaseItem> = {
-  // Raw Materials
+  // Raw Materials - Tier 1: Cannot be disassembled
   steel: {
     id: 'steel',
     name: 'Steel',
@@ -12,7 +12,8 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 12,
     description: 'High-strength carbon steel alloy, primary construction material',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
   },
   
   aluminum: {
@@ -22,7 +23,8 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 8,
     description: 'Lightweight aluminum alloy, corrosion resistant',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
   },
   
   plastic: {
@@ -32,7 +34,8 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 3,
     description: 'High-density polymer plastic for grips and housings',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
   },
   
   titanium: {
@@ -42,10 +45,11 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 45,
     description: 'Premium titanium alloy, exceptional strength-to-weight ratio',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
   },
   
-  // Electronic Components
+  // Electronic Components - Tier 2: Shaped materials
   basic_electronics: {
     id: 'basic_electronics',
     name: 'Basic Electronics',
@@ -53,7 +57,9 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 15,
     description: 'Basic electronic components and circuitry',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'industrial_chemicals'
   },
   
   advanced_electronics: {
@@ -63,10 +69,12 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 65,
     description: 'Sophisticated electronic systems and targeting components',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'industrial_chemicals'
   },
   
-  // Mechanical Components
+  // Mechanical Components - Tier 2: Shaped materials
   machined_parts: {
     id: 'machined_parts',
     name: 'Machined Parts',
@@ -74,7 +82,9 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 25,
     description: 'Precision machined mechanical components',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'steel'
   },
   
   low_tech_spares: {
@@ -84,7 +94,9 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 8,
     description: 'Simple mechanical parts and hardware',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'steel'
   },
   
   precision_spares: {
@@ -94,10 +106,12 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 35,
     description: 'High-precision mechanical components',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'steel'
   },
   
-  // NEW: Component-based manufacturing items
+  // NEW: Component-based manufacturing items - Tier 2: Shaped materials
   'mechanical-component': {
     id: 'mechanical-component',
     name: 'Mechanical Component',
@@ -105,7 +119,9 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 5,
     description: 'Basic mechanical component differentiated by manufacturing state',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'steel'
   },
   
   'mechanical-assembly': {
@@ -115,7 +131,12 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 50,
     description: 'Combined mechanical components forming a sub-assembly',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'mechanical-component', quantity: 5, requiredTags: [ItemTag.ROUGH] },
+      { componentId: 'mechanical-component', quantity: 5, requiredTags: [ItemTag.PRECISION] }
+    ]
   },
   
   'plastic-casing': {
@@ -125,10 +146,12 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 10,
     description: 'Molded plastic housing for external protection',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'plastic'
   },
   
-  // Scrap materials from restoration
+  // Scrap materials from restoration - Tier 1: Raw materials (even though recovered)
   'plastic-scrap': {
     id: 'plastic-scrap',
     name: 'Plastic Scrap',
@@ -136,7 +159,8 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 1,
     description: 'Recovered plastic fragments from disassembly',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
   },
   
   'steel-scrap': {
@@ -146,10 +170,11 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 4,
     description: 'Recovered steel fragments from disassembly',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
   },
   
-  // Finished Products
+  // Finished Products - Tier 3: Assemblies (CAN be disassembled)
   basic_sidearm: {
     id: 'basic_sidearm',
     name: 'Basic Sidearm',
@@ -157,7 +182,12 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 180,
     description: 'Standard-issue sidearm pistol, reliable and effective',
     stackable: false,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'mechanical-assembly', quantity: 1, requiredTags: [ItemTag.ASSEMBLY] },
+      { componentId: 'plastic-casing', quantity: 1, requiredTags: [ItemTag.CASING] }
+    ]
   },
   
   tactical_knife: {
@@ -167,7 +197,12 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 85,
     description: 'Military-grade combat knife with versatile blade design',
     stackable: false,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'blade-finished', quantity: 1 },
+      { componentId: 'knife-handle', quantity: 1 }
+    ]
   },
   
   heavy_rifle: {
@@ -177,10 +212,16 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 650,
     description: 'High-powered military rifle for long-range combat',
     stackable: false,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'heavy-barrel', quantity: 1 },
+      { componentId: 'rifle-assembly', quantity: 1 },
+      { componentId: 'composite-stock', quantity: 1 }
+    ]
   },
   
-  // Legacy Damaged Items (for restoration methods)
+  // Legacy Damaged Items (for restoration methods) - Tier 3: Assemblies with damaged condition
   damaged_basic_sidearm: {
     id: 'damaged_basic_sidearm',
     name: 'Damaged Basic Sidearm',
@@ -188,7 +229,12 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 25,
     description: 'Broken sidearm requiring restoration to functional condition',
     stackable: false,
-    defaultTags: []
+    defaultTags: [ItemTag.DAMAGED],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'mechanical-assembly', quantity: 1, requiredTags: [ItemTag.ASSEMBLY, ItemTag.DAMAGED] },
+      { componentId: 'plastic-scrap', quantity: 1, requiredTags: [ItemTag.SALVAGED] }
+    ]
   },
   
   damaged_tactical_knife: {
@@ -198,7 +244,12 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 12,
     description: 'Damaged knife with chipped blade, needs restoration',
     stackable: false,
-    defaultTags: []
+    defaultTags: [ItemTag.DAMAGED],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'blade-damaged', quantity: 1 },
+      { componentId: 'knife-handle', quantity: 1 }
+    ]
   },
   
   dull_tactical_knife: {
@@ -208,10 +259,15 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 35,
     description: 'Functional knife with dull edge, needs sharpening',
     stackable: false,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'blade-dull', quantity: 1 },
+      { componentId: 'knife-handle', quantity: 1 }
+    ]
   },
   
-  // Composite Materials
+  // Composite Materials - Tier 1: Raw materials
   composite_materials: {
     id: 'composite_materials',
     name: 'Composite Materials',
@@ -219,10 +275,11 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 28,
     description: 'Advanced composite materials for specialized applications',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
   },
   
-  // Chemical Compounds
+  // Chemical Compounds - Tier 1: Raw materials
   industrial_chemicals: {
     id: 'industrial_chemicals',
     name: 'Industrial Chemicals',
@@ -230,7 +287,8 @@ export const baseItems: Record<string, BaseItem> = {
     baseValue: 18,
     description: 'Chemical compounds for manufacturing processes',
     stackable: true,
-    defaultTags: []
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
   }
 };
 
