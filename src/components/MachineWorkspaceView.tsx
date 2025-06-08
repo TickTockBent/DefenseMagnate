@@ -606,11 +606,7 @@ function ProductionInterface({ facility }: ProductionInterfaceProps) {
                   }
                 }
                 
-                // Debug: Log net materials for component methods
-                if (method.id.includes('component')) {
-                  console.log(`Method ${method.id} material balance:`, Object.fromEntries(materialBalance));
-                  console.log(`Method ${method.id} net required materials:`, netRequiredMaterials);
-                }
+                // Debug logging removed - component methods working correctly
                 
                 // Check availability and track missing materials
                 const missingMaterials: string[] = [];

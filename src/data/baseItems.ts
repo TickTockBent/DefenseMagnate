@@ -128,6 +128,27 @@ export const baseItems: Record<string, BaseItem> = {
     defaultTags: []
   },
   
+  // Scrap materials from restoration
+  'plastic-scrap': {
+    id: 'plastic-scrap',
+    name: 'Plastic Scrap',
+    category: ItemCategory.MATERIAL,
+    baseValue: 1,
+    description: 'Recovered plastic fragments from disassembly',
+    stackable: true,
+    defaultTags: []
+  },
+  
+  'steel-scrap': {
+    id: 'steel-scrap',
+    name: 'Steel Scrap',
+    category: ItemCategory.MATERIAL,
+    baseValue: 4,
+    description: 'Recovered steel fragments from disassembly',
+    stackable: true,
+    defaultTags: []
+  },
+  
   // Finished Products
   basic_sidearm: {
     id: 'basic_sidearm',
