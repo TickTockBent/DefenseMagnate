@@ -10,6 +10,7 @@ Manufacturing v2 will replace static recipe-based manufacturing with an intellig
 - Provides enhancement options based on available technology
 - Handles special status conditions automatically
 - Integrates with markets and contracts for enhanced products
+- **Implements clear manufacturing hierarchy with logical assembly/disassembly boundaries**
 
 ## Current State Analysis
 
@@ -24,11 +25,101 @@ Manufacturing v2 will replace static recipe-based manufacturing with an intellig
 - Static MachineBasedMethod definitions → Dynamic workflow generation
 - Fixed material consumption/production → Intelligent gap analysis
 - Hardcoded enhancement options → Dynamic enhancement discovery
+- **Artificial component hierarchy → Clear material shaping and assembly boundaries**
+
+## Manufacturing Hierarchy Framework
+
+### Core Design Principle: Clear Assembly/Disassembly Boundaries
+
+Manufacturing v2 implements a logical three-tier hierarchy that eliminates conceptual inconsistencies:
+
+#### **Tier 1: Raw Materials (Atomic)**
+- **Cannot be disassembled** - These are pure, unprocessed materials
+- Examples: `steel`, `aluminum`, `plastic`, `titanium`
+- Obtained through: Mining, purchasing, recycling
+
+#### **Tier 2: Shaped Materials (Processed from Raw Materials)**
+- **Cannot be disassembled** - These ARE the raw material, just shaped/processed
+- **Can be further shaped** - Can undergo additional processing steps
+- Examples: `steel-billet`, `steel-sheet`, `plastic-rod`, `aluminum-stock`
+- Manufacturing stages: `mechanical-component-rough`, `mechanical-component-precision`, `blade-blank`, `blade-finished`
+
+#### **Tier 3: Assemblies (Combinations of Components)**
+- **CAN be disassembled** - These are multiple parts joined together
+- Examples: `mechanical-assembly`, `knife-handle`, `basic-sidearm`, `tactical-knife`
+- Disassemble into: Their constituent shaped materials and sub-assemblies
+
+### Manufacturing Operation Types
+
+```typescript
+enum OperationType {
+  SHAPING = 'shaping',        // Raw → Shaped OR Shaped → Better Shaped
+  ASSEMBLY = 'assembly',      // Components → Assembly  
+  DISASSEMBLY = 'disassembly' // Assembly → Components (reverse of assembly only)
+}
+
+enum ItemManufacturingType {
+  RAW_MATERIAL = 'raw_material',      // Steel, aluminum, plastic
+  SHAPED_MATERIAL = 'shaped_material', // Steel billet, precision component
+  ASSEMBLY = 'assembly'               // Mechanical assembly, sidearm
+}
+```
+
+### Manufacturing Flow Examples
+
+#### **Valid Manufacturing Paths**:
+```
+steel → steel-billet (preparation/shaping)
+steel-billet → mechanical-component-rough (rough machining)
+steel-billet → mechanical-component-precision (precision machining)
+mechanical-component-rough + mechanical-component-precision → mechanical-assembly (assembly)
+mechanical-assembly + plastic-casing → basic-sidearm (assembly)
+```
+
+#### **Valid Disassembly Paths**:
+```
+basic-sidearm → mechanical-assembly + plastic-casing (disassembly)
+mechanical-assembly → mechanical-components (various types) (disassembly)
+STOP - Components cannot be disassembled (they ARE steel, just shaped)
+```
+
+#### **Enhanced Realism Through Preparation**:
+- Steel must be prepared into appropriate billets for specific products
+- Different products require different billet preparations
+- Billet preparation is a necessary manufacturing step that enhances verisimilitude
+- Players understand they're shaping materials, not arbitrarily creating/destroying matter
 
 ## Phase 1: Core Dynamic Workflow Engine
 
-### 1.1 Condition Analysis System
-**Goal**: Analyze input items and predict component recovery
+### 1.1 Manufacturing Hierarchy Implementation
+**Goal**: Implement the three-tier manufacturing system with clear boundaries
+
+**New Types**:
+```typescript
+interface BaseItem {
+  id: string;
+  name: string;
+  category: ItemCategory;
+  manufacturingType: ItemManufacturingType;  // NEW - Defines tier
+  baseValue: number;
+  // ... existing properties
+}
+
+interface ManufacturingRule {
+  canDisassemble: boolean;
+  canShape: boolean;
+  canAssemble: boolean;
+  reason: 'raw_material' | 'shaped_material' | 'assembly';
+}
+```
+
+**New Systems**:
+- `systems/manufacturingRules.ts` - Validates operations based on hierarchy
+- `data/materialPreparation.ts` - Defines raw material → billet conversions
+- `utils/assemblyValidation.ts` - Validates assembly/disassembly operations
+
+### 1.2 Condition Analysis System
+**Goal**: Analyze input items and predict component recovery within hierarchy rules
 
 **New Types**:
 ```typescript

@@ -8,9 +8,35 @@ Manufacturing V2 transforms Defense Magnate from recipe-based production to an i
 
 ### From Static Recipes to Dynamic Intelligence
 **Current System**: Predefined manufacturing methods with fixed inputs and outputs
-**V2 System**: Intelligent analysis of inputs with dynamic workflow generation
+**V2 System**: Intelligent analysis of inputs with dynamic workflow generation within a logical manufacturing hierarchy
 
-**Example**: Instead of separate "restore damaged sidearm" and "forge new sidearm" methods, the system analyzes the available inputs and automatically generates the optimal manufacturing workflow.
+**Example**: Instead of separate "restore damaged sidearm" and "forge new sidearm" methods, the system analyzes the available inputs and automatically generates the optimal manufacturing workflow, respecting clear boundaries between material shaping and assembly operations.
+
+### Manufacturing Hierarchy with Logical Boundaries
+
+Manufacturing v2 implements a three-tier system that eliminates conceptual inconsistencies:
+
+#### **Tier 1: Raw Materials (Atomic)**
+- **Cannot be disassembled** - Pure, unprocessed materials
+- Examples: `steel`, `aluminum`, `plastic`, `titanium`
+- Source: Mining, purchasing, basic recycling
+
+#### **Tier 2: Shaped Materials (Processed Materials)**
+- **Cannot be disassembled** - These ARE the raw material, just shaped/processed
+- **Can be further shaped** - Additional processing steps possible
+- Examples: `steel-billet`, `steel-sheet`, `blade-blank`, `mechanical-component-rough`
+- Process: Raw materials shaped through machining, forming, preparation
+
+#### **Tier 3: Assemblies (Combined Components)**
+- **CAN be disassembled** - Multiple separate parts joined together
+- Examples: `mechanical-assembly`, `basic-sidearm`, `tactical-knife`
+- Process: Shaped materials combined into functional products
+
+### Enhanced Realism Through Material Preparation
+- Steel must be prepared into appropriate billets before component machining
+- Different products require specific material preparations
+- Material preparation becomes a necessary and realistic manufacturing step
+- Players understand they're shaping matter, not creating/destroying it arbitrarily
 
 ### Intelligent Manufacturing Decisions
 The system will:
@@ -40,28 +66,91 @@ When a manufacturing job is initiated, the system performs intelligent analysis:
 - Insert treatment operations for special conditions
 - Optimize operation order for efficiency
 
-### Example: Dynamic Restoration
+### Example: Dynamic Restoration with Material Hierarchy
 **Player Action**: Start "Basic Sidearm" job with 1x Basic Sidearm [damaged] [drenched] as input
 
 **System Analysis**:
 1. **Condition Assessment**: Item is water-damaged, requires drying and rust treatment
-2. **Disassembly Prediction**: Estimates 3 salvageable rough components, 1 precision component, casing unusable
+2. **Disassembly Prediction**: Assembly → mechanical-assembly + plastic-casing (damaged), mechanical-assembly → 3 salvageable rough components, 1 precision component
 3. **Gap Calculation**: Need 4 more rough, 4 more precision, 1 new casing
-4. **Treatment Requirements**: Requires drying and rust removal for salvaged components
+4. **Material Requirements**: Steel must be prepared into billets before component machining
+5. **Treatment Requirements**: Drying and rust removal for salvaged components
 
 **Generated Workflow**:
 1. **Drainage & Assessment** (20min) - Remove water, assess corrosion damage
-2. **Disassembly** (15min) - Carefully extract salvageable components
-3. **Rust Treatment** (45min) - Chemical treatment for recovered components
-4. **Rough Milling** (53min) - Mill 4 additional rough components from steel
-5. **Precision Turning** (47min) - Turn 4 additional precision components
-6. **Casing Formation** (28min) - Mold new plastic casing
-7. **Assembly** (25min) - Combine all components (3 salvaged + 8 new)
-8. **Final Assembly** (15min) - Install mechanism in new casing
-9. **Quality Control** (10min) - Test restored weapon
+2. **Disassembly** (15min) - Basic Sidearm → mechanical-assembly + damaged casing
+3. **Component Disassembly** (10min) - Mechanical-assembly → salvageable components  
+4. **Rust Treatment** (45min) - Chemical treatment for recovered shaped components
+5. **Steel Preparation** (30min) - Steel → steel-billet for new components
+6. **Rough Machining** (53min) - Steel-billet → 4 additional rough components
+7. **Precision Machining** (47min) - Steel-billet → 4 additional precision components
+8. **Casing Formation** (28min) - Plastic → plastic-casing (new)
+9. **Component Assembly** (25min) - All components → new mechanical-assembly
+10. **Final Assembly** (15min) - Mechanical-assembly + casing → basic-sidearm
+11. **Quality Control** (10min) - Test restored weapon
 
-**Total Time**: ~258 minutes (vs 183 for standard restore method)
-**Materials**: 0.7 steel, 0.5 plastic, rust removal chemicals
+**Total Time**: ~298 minutes (includes material preparation)
+**Materials**: 0.8 steel (including prep waste), 0.5 plastic, rust removal chemicals
+
+**Key Differences from V1**:
+- Clear distinction between disassembly (assemblies) and material preparation (shaping)
+- Steel must be prepared into billets before component creation
+- No artificial "component upgrades" - components are shaped from billets
+- Realistic material flow: Raw → Shaped → Assembled
+
+## Manufacturing Operation Boundaries
+
+### What CAN Be Disassembled
+```typescript
+// Tier 3: Assemblies - Multiple parts joined together
+basic_sidearm → mechanical_assembly + plastic_casing
+mechanical_assembly → 5x mechanical_component_rough + 5x mechanical_component_precision
+tactical_knife → blade_finished + knife_handle
+knife_handle → grip_material + hardware_components
+```
+
+### What CANNOT Be Disassembled
+```typescript
+// Tier 1: Raw Materials - Atomic materials
+steel ❌ // Cannot break down further
+aluminum ❌ // Pure material
+plastic ❌ // Base polymer
+
+// Tier 2: Shaped Materials - Processed but still fundamentally one material
+steel_billet ❌ // IS steel, just prepared
+mechanical_component_rough ❌ // IS steel, just machined to shape
+mechanical_component_precision ❌ // IS steel, just machined differently
+blade_finished ❌ // IS steel, just shaped into blade form
+plastic_casing ❌ // IS plastic, just molded
+```
+
+### Valid Manufacturing Flows
+```typescript
+// Shaping Operations (Raw → Shaped OR Shaped → Better Shaped)
+steel → steel_billet (preparation)
+steel_billet → mechanical_component_rough (rough machining)
+steel_billet → mechanical_component_precision (precision machining)
+plastic → plastic_casing (molding)
+steel_billet → blade_blank (blade shaping)
+blade_blank → blade_finished (sharpening/finishing)
+
+// Assembly Operations (Shaped → Assembly)
+mechanical_component_rough + mechanical_component_precision → mechanical_assembly
+mechanical_assembly + plastic_casing → basic_sidearm
+blade_finished + knife_handle → tactical_knife
+
+// Disassembly Operations (Assembly → Shaped, reverse of assembly only)
+basic_sidearm → mechanical_assembly + plastic_casing
+mechanical_assembly → mechanical_components (various)
+tactical_knife → blade_finished + knife_handle
+```
+
+### Manufacturing Logic Rules
+1. **Raw materials** are atomic - cannot be broken down
+2. **Shaped materials** are still fundamentally the original material - cannot be "disassembled" back to raw form
+3. **Assemblies** combine multiple discrete parts - can be disassembled back to those parts
+4. **Material preparation** (raw → billet) is necessary before component shaping
+5. **No artificial hierarchies** - precision components come from billets, not rough components
 
 ## Enhancement Modifier System
 
@@ -250,10 +339,31 @@ As jobs progress, the interface shows:
 
 #### **Enhanced Manufacturing Methods**
 Methods become templates that generate specific workflows:
-- Base operation sequences for each product type
+- Base operation sequences for each product type organized by manufacturing tier
+- Material preparation workflows (Raw → Shaped)
+- Assembly/disassembly workflows (Shaped ↔ Assembly)  
 - Condition-specific operation libraries
 - Enhancement operation catalogs
 - Equipment substitution matrices
+
+#### **Manufacturing Type Classification**
+```typescript
+interface BaseItem {
+  id: string;
+  name: string;
+  category: ItemCategory;
+  manufacturingType: ItemManufacturingType;  // NEW
+  baseValue: number;
+  materialSource?: string;  // For shaped materials: which raw material
+  assemblyComponents?: ComponentRequirement[];  // For assemblies: what parts
+}
+
+enum ItemManufacturingType {
+  RAW_MATERIAL = 'raw_material',      // steel, aluminum, plastic
+  SHAPED_MATERIAL = 'shaped_material', // steel_billet, mechanical_component_rough
+  ASSEMBLY = 'assembly'               // mechanical_assembly, basic_sidearm
+}
+```
 
 #### **Item Condition Metadata**
 Items carry detailed condition information:
@@ -317,8 +427,11 @@ Jobs track more sophisticated state information:
 
 ## Implementation Timeline
 
-### Phase 1: Dynamic Workflow Engine
-- Condition analysis and gap calculation systems
+### Phase 1: Manufacturing Hierarchy & Dynamic Workflow Engine
+- Three-tier manufacturing hierarchy implementation (Raw → Shaped → Assembly)
+- Manufacturing operation boundary validation system
+- Material preparation workflow system (raw materials → billets)
+- Condition analysis and gap calculation systems respecting hierarchy
 - Basic workflow generation for standard restoration scenarios
 - Integration with existing component manufacturing system
 
