@@ -97,6 +97,58 @@ export const baseItems: Record<string, BaseItem> = {
     defaultTags: []
   },
   
+  // NEW: Component-based manufacturing items
+  'mechanical-component': {
+    id: 'mechanical-component',
+    name: 'Mechanical Component',
+    category: ItemCategory.COMPONENT,
+    baseValue: 5,
+    description: 'Basic mechanical component differentiated by manufacturing state',
+    stackable: true,
+    defaultTags: []
+  },
+  
+  'mechanical-assembly': {
+    id: 'mechanical-assembly',
+    name: 'Mechanical Assembly',
+    category: ItemCategory.COMPONENT,
+    baseValue: 50,
+    description: 'Combined mechanical components forming a sub-assembly',
+    stackable: true,
+    defaultTags: []
+  },
+  
+  'plastic-casing': {
+    id: 'plastic-casing',
+    name: 'Plastic Casing',
+    category: ItemCategory.COMPONENT,
+    baseValue: 10,
+    description: 'Molded plastic housing for external protection',
+    stackable: true,
+    defaultTags: []
+  },
+  
+  // Scrap materials from restoration
+  'plastic-scrap': {
+    id: 'plastic-scrap',
+    name: 'Plastic Scrap',
+    category: ItemCategory.MATERIAL,
+    baseValue: 1,
+    description: 'Recovered plastic fragments from disassembly',
+    stackable: true,
+    defaultTags: []
+  },
+  
+  'steel-scrap': {
+    id: 'steel-scrap',
+    name: 'Steel Scrap',
+    category: ItemCategory.MATERIAL,
+    baseValue: 4,
+    description: 'Recovered steel fragments from disassembly',
+    stackable: true,
+    defaultTags: []
+  },
+  
   // Finished Products
   basic_sidearm: {
     id: 'basic_sidearm',

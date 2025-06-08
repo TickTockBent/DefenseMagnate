@@ -1,4 +1,6 @@
-// Updated product definitions with tag-based manufacturing system
+// LEGACY: Updated product definitions with tag-based manufacturing system
+// SUPERSEDED BY: Component-based manufacturing methods in manufacturingMethods.ts
+// This file contains old product definitions that are no longer actively used
 
 import { 
   TagCategory,

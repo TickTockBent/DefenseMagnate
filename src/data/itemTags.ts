@@ -121,6 +121,42 @@ export const tagEffects: Record<ItemTag, TagEffect> = {
     qualityMultiplier: 0.8,   // 20% quality penalty
     valueMultiplier: 3.0,     // 200% value bonus (collector value)
     description: 'Historical items with significant collector and cultural value'
+  },
+  
+  // NEW: Component Manufacturing Tags
+  [ItemTag.ROUGH]: {
+    tag: ItemTag.ROUGH,
+    qualityMultiplier: 0.7,   // 30% quality penalty - unfinished state
+    valueMultiplier: 0.4,     // 60% value penalty - intermediate product
+    description: 'Unfinished mechanical component requiring additional processing'
+  },
+  
+  [ItemTag.PRECISION]: {
+    tag: ItemTag.PRECISION,
+    qualityMultiplier: 1.1,   // 10% quality bonus - refined state
+    valueMultiplier: 1.2,     // 20% value bonus - precision manufacturing
+    description: 'Precision-machined component meeting tight tolerances'
+  },
+  
+  [ItemTag.ASSEMBLY]: {
+    tag: ItemTag.ASSEMBLY,
+    qualityMultiplier: 1.0,   // Neutral quality - depends on component quality
+    valueMultiplier: 1.5,     // 50% value bonus - combined complexity
+    description: 'Assembled mechanical unit combining multiple components'
+  },
+  
+  [ItemTag.CASING]: {
+    tag: ItemTag.CASING,
+    qualityMultiplier: 1.0,   // Neutral quality - functional protection
+    valueMultiplier: 0.8,     // 20% value penalty - simple molded part
+    description: 'Protective housing for mechanical assemblies'
+  },
+  
+  [ItemTag.LOW_TECH]: {
+    tag: ItemTag.LOW_TECH,
+    qualityMultiplier: 0.9,   // 10% quality penalty - basic technology
+    valueMultiplier: 0.7,     // 30% value penalty - simple technology
+    description: 'Basic technology level using conventional manufacturing methods'
   }
 };
 
@@ -213,7 +249,7 @@ export function isValidTag(tag: string): tag is ItemTag {
 
 export function getCompatibleTags(itemCategory: string): ItemTag[] {
   // All items can have condition tags
-  let compatibleTags = [...getConditionTags()];
+  const compatibleTags = [...getConditionTags()];
   
   // Materials can have material grade tags
   if (itemCategory === 'material') {

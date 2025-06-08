@@ -163,6 +163,7 @@ interface GameState {
     quantity: number,
     rushOrder?: boolean
   ) => void;
+  cancelMachineJob: (facilityId: string, jobId: string) => boolean;
   
   // System update
   updateProduction: () => void;
@@ -628,6 +629,27 @@ export const useGameStore = create<GameState>((set, get) => ({
     
     // Single state update with the current workspace
     set({ machineWorkspace: state.machineWorkspaceManager.getWorkspace(facilityId) });
+  },
+  
+  // Cancel a machine job and recover materials
+  cancelMachineJob: (facilityId: string, jobId: string) => {
+    const state = get();
+    const facility = state.facilities.find(f => f.id === facilityId);
+    if (!facility) {
+      console.error(`Cannot cancel job ${jobId}: facility ${facilityId} not found`);
+      return false;
+    }
+    
+    // Use the machine workspace manager to cancel the job
+    const success = state.machineWorkspaceManager.cancelJob(facilityId, jobId);
+    
+    if (success) {
+      // Update the workspace state after cancellation
+      set({ machineWorkspace: state.machineWorkspaceManager.getWorkspace(facilityId) });
+      console.log(`Job ${jobId} cancelled successfully`);
+    }
+    
+    return success;
   },
   
   // Main production update loop
@@ -1224,5 +1246,33 @@ useGameStore.setState({
     contractHistory: [],
     lastContractRefresh: 0,
     nextRefreshAt: 48 // Next refresh in 48 hours
+  }
+});
+
+// Set up job completion callback on the store's machine workspace manager
+useGameStore.getState().machineWorkspaceManager.setJobCompleteCallback((job) => {
+  const store = useGameStore.getState();
+  store.addJobCompletionNotification({
+    jobId: job.id,
+    productId: job.productId,
+    methodName: job.method.name,
+    quantity: job.quantity
+  });
+  
+  // Force a complete state update to refresh the UI with completed items
+  // This ensures the facility inventory changes are reflected in the UI
+  if (store.selectedFacilityId) {
+    const updatedFacility = store.facilities.find(f => f.id === store.selectedFacilityId);
+    if (updatedFacility) {
+      // Update the machine workspace manager with the current facility state
+      store.machineWorkspaceManager.setFacility(updatedFacility);
+      
+      // Update the workspace in the UI state
+      useGameStore.setState({ 
+        machineWorkspace: store.machineWorkspaceManager.getWorkspace(store.selectedFacilityId),
+        // Trigger a re-render by updating the facilities array reference
+        facilities: [...store.facilities]
+      });
+    }
   }
 });

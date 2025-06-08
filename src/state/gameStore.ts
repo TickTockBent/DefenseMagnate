@@ -1,3 +1,7 @@
+// LEGACY: Old game store implementation
+// SUPERSEDED BY: gameStoreWithEquipment.ts (main game store)
+// This file is kept for reference but should not be used in active development
+
 console.log('A. gameStore.ts starting to load')
 
 import { create } from 'zustand';

@@ -1,46 +1,42 @@
 // Manufacturing Methods with Single-Machine Operations
 
 import { 
-  MachineBasedMethod, 
-  MachineOperation,
+  MachineBasedMethod,
   TagCategory,
   ItemTag
 } from '../types';
 
-// Basic Sidearm - Forge New Method
-export const basicSidearmForgeMethod: MachineBasedMethod = {
-  id: 'basic_sidearm_forge',
-  name: 'Forge New',
-  description: 'Manufacture a new sidearm from raw materials',
+// LEGACY METHODS REMOVED - Only component-based methods remain
+// NEW: Component-Based Basic Sidearm Method
+export const basicSidearmComponentMethod: MachineBasedMethod = {
+  id: 'basic_sidearm_component',
+  name: 'Forge New (Component-Based)',
+  description: 'Manufacture a new sidearm from raw materials using component transformation',
   
   // Output configuration for new inventory system
-  outputTags: [ItemTag.FORGED],
+  outputTags: [ItemTag.FORGED, ItemTag.LOW_TECH],
   qualityRange: [80, 95],
   
   operations: [
-    // Operation 1: Material Preparation (Workbench)
+    // Operation 1: Material Preparation
     {
-      id: 'forge_material_prep',
+      id: 'component_material_prep',
       name: 'Material Preparation',
       description: 'Prepare and measure raw materials',
       requiredTag: {
         category: TagCategory.SURFACE,
         minimum: 2
       },
-      baseDurationMinutes: 10, // 10 game minutes
-      material_requirements: [
-        { material_id: 'steel', quantity: 1.0, consumed_at_start: true },
-        { material_id: 'plastic', quantity: 0.3, consumed_at_start: true }
-      ],
+      baseDurationMinutes: 10,
+      // NEW: No material consumption or production - just preparation
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'unskilled'
     },
     
-    
-    // Operation 2: Rough Milling (Mill)
+    // Operation 2: Rough Milling - Steel → Rough Components
     {
-      id: 'forge_rough_milling',
+      id: 'component_rough_milling', 
       name: 'Rough Milling',
       description: 'Mill frame and major components',
       requiredTag: {
@@ -48,553 +44,580 @@ export const basicSidearmForgeMethod: MachineBasedMethod = {
         minimum: 10,
         optimal: 30
       },
-      baseDurationMinutes: 40, // 40 game minutes
-      material_requirements: [],
+      baseDurationMinutes: 40,
+      // NEW: Material transformation system
+      materialConsumption: [
+        { itemId: 'steel', count: 1.0 }
+      ],
+      materialProduction: [
+        { 
+          itemId: 'mechanical-component', 
+          count: 10, 
+          tags: [ItemTag.ROUGH, ItemTag.LOW_TECH],
+          quality: 70
+        }
+      ],
       can_fail: true,
       failure_chance: 0.05,
-      failure_result: 'scrap',
       labor_skill: 'skilled_machinist'
     },
     
-    // Operation 3: Precision Turning (Lathe)
+    // Operation 3: Precision Turning - Rough → Precision Components
     {
-      id: 'forge_precision_turning',
-      name: 'Precision Turning',
+      id: 'component_precision_turning',
+      name: 'Precision Turning', 
       description: 'Turn barrel and precision components',
       requiredTag: {
         category: TagCategory.TURNING,
         minimum: 8,
-        optimal: 35
+        optimal: 20
       },
-      baseDurationMinutes: 35, // 35 game minutes
-      material_requirements: [],
+      baseDurationMinutes: 35,
+      materialConsumption: [
+        { itemId: 'mechanical-component', count: 5, tags: [ItemTag.ROUGH] }
+      ],
+      materialProduction: [
+        {
+          itemId: 'mechanical-component',
+          count: 5,
+          tags: [ItemTag.PRECISION, ItemTag.LOW_TECH],
+          quality: 85
+        }
+      ],
       can_fail: true,
       failure_chance: 0.08,
-      failure_result: 'scrap',
       labor_skill: 'skilled_machinist'
     },
     
-    // Operation 4: Component Assembly (Workbench)
+    // Operation 4: Component Assembly - Components → Assembly
     {
-      id: 'forge_assembly',
+      id: 'component_assembly',
       name: 'Component Assembly',
       description: 'Assemble all components',
+      requiredTag: {
+        category: TagCategory.BASIC_MANIPULATION,
+        minimum: 10
+      },
+      baseDurationMinutes: 25,
+      materialConsumption: [
+        { itemId: 'mechanical-component', count: 5, tags: [ItemTag.ROUGH] },
+        { itemId: 'mechanical-component', count: 5, tags: [ItemTag.PRECISION] }
+      ],
+      materialProduction: [
+        {
+          itemId: 'mechanical-assembly',
+          count: 1,
+          tags: [ItemTag.ASSEMBLY, ItemTag.LOW_TECH],
+          quality: 85
+        }
+      ],
+      can_fail: true,
+      failure_chance: 0.03,
+      labor_skill: 'skilled_technician'
+    },
+    
+    // Operation 5: Shape Casing - Plastic → Casing
+    {
+      id: 'component_shape_casing',
+      name: 'Shape Casing',
+      description: 'Shape the outer casing',
       requiredTag: {
         category: TagCategory.SURFACE,
         minimum: 2
       },
-      baseDurationMinutes: 25, // 25 game minutes
-      material_requirements: [],
+      baseDurationMinutes: 28,
+      materialConsumption: [
+        { itemId: 'plastic', count: 0.3 }
+      ],
+      materialProduction: [
+        {
+          itemId: 'plastic-casing',
+          count: 1,
+          tags: [ItemTag.CASING, ItemTag.LOW_TECH],
+          quality: 75
+        }
+      ],
       can_fail: true,
-      failure_chance: 0.03,
-      failure_result: 'downgrade',
+      failure_chance: 0.02,
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 5: Final Assembly (Hand Tools)
+    // Operation 6: Final Assembly - Assembly + Casing → Sidearm
     {
-      id: 'forge_final_assembly',
+      id: 'component_final_assembly',
       name: 'Final Assembly',
       description: 'Fine adjustments and fitting',
       requiredTag: {
-        category: TagCategory.BASIC_MANIPULATION,
-        minimum: 10,
-        optimal: 20
+        category: TagCategory.PRECISION_MANIPULATION,
+        minimum: 8
       },
-      baseDurationMinutes: 15, // 15 game minutes
-      material_requirements: [],
+      baseDurationMinutes: 15,
+      materialConsumption: [
+        { itemId: 'mechanical-assembly', count: 1, tags: [ItemTag.ASSEMBLY] },
+        { itemId: 'plastic-casing', count: 1, tags: [ItemTag.CASING] }
+      ],
+      materialProduction: [
+        {
+          itemId: 'basic_sidearm',
+          count: 1,
+          tags: [ItemTag.FORGED, ItemTag.LOW_TECH],
+          inheritQuality: true // Final quality depends on component quality
+        }
+      ],
       can_fail: true,
       failure_chance: 0.02,
-      failure_result: 'downgrade',
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 6: Quality Control (Measuring Tools)
+    // Operation 7: Quality Control - Final inspection
     {
-      id: 'forge_quality_control',
+      id: 'component_quality_control',
       name: 'Quality Control',
       description: 'Test and verify specifications',
       requiredTag: {
         category: TagCategory.MEASURING,
         minimum: true
       },
-      baseDurationMinutes: 10, // 10 game minutes
-      material_requirements: [],
+      baseDurationMinutes: 10,
+      // QC just verifies - no material transformation
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'quality_inspector'
     }
   ],
   
-  // Legacy output configuration
+  // Method properties
   output_state: 'pristine',
   output_quality_range: [80, 95],
-  labor_cost_multiplier: 1.5,
-  complexity_rating: 5,
-  profit_margin_modifier: 1.3,
-  required_facility_traits: [],
-  customer_appeal: ['military', 'government', 'corporate']
+  labor_cost_multiplier: 1.2, // Slightly higher due to component complexity
+  complexity_rating: 8,
+  profit_margin_modifier: 1.1,
+  customer_appeal: ['quality_conscious', 'precision_seekers', 'component_enthusiasts']
 };
 
-// Basic Sidearm - Restore Method
-export const basicSidearmRestoreMethod: MachineBasedMethod = {
-  id: 'basic_sidearm_restore',
-  name: 'Restore Damaged',
-  description: 'Restore a damaged weapon to functional condition',
+// NEW: Component-Based Restore Damaged Method
+export const basicSidearmRestoreComponentMethod: MachineBasedMethod = {
+  id: 'basic_sidearm_restore_component',
+  name: 'Restore Damaged (Component-Based)',
+  description: 'Restore a damaged weapon to functional condition using component breakdown',
   
-  // Output configuration for new inventory system
-  outputTags: [ItemTag.RESTORED],
+  // Output configuration
+  outputTags: [ItemTag.RESTORED, ItemTag.LOW_TECH],
   qualityRange: [60, 80],
   
   operations: [
-    // Operation 1: Disassembly (Workbench)
+    // Operation 1: Uncasing - Remove the outer casing
     {
-      id: 'restore_disassembly',
-      name: 'Disassembly',
+      id: 'restore_comp_uncasing',
+      name: 'Uncasing',
       description: 'Carefully disassemble damaged weapon',
       requiredTag: {
         category: TagCategory.SURFACE,
         minimum: 2
       },
-      baseDurationMinutes: 15, // 15 game minutes
-      material_requirements: [
-        { material_id: 'basic_sidearm', quantity: 1, consumed_at_start: true, required_tags: [ItemTag.DAMAGED] }
+      baseDurationMinutes: 15,
+      materialConsumption: [
+        { itemId: 'basic_sidearm', count: 1, tags: [ItemTag.DAMAGED], maxQuality: 25 }
+      ],
+      materialProduction: [
+        { 
+          itemId: 'mechanical-assembly', 
+          count: 1, 
+          tags: [ItemTag.ASSEMBLY, ItemTag.LOW_TECH, ItemTag.DAMAGED],
+          quality: 20
+        },
+        {
+          itemId: 'plastic-scrap',
+          count: 1,
+          tags: [ItemTag.SALVAGED],
+          quality: 15
+        }
       ],
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 2: Parts Inspection (Hand Tools)
+    // Operation 2: Disassembly - Break down the assembly into components
     {
-      id: 'restore_inspection',
-      name: 'Parts Inspection',
-      description: 'Inspect and sort salvageable parts',
+      id: 'restore_comp_disassembly',
+      name: 'Disassembly',
+      description: 'Carefully disassemble mechanical assembly',
       requiredTag: {
         category: TagCategory.BASIC_MANIPULATION,
-        minimum: 10,
-        optimal: 15
+        minimum: 10
       },
-      baseDurationMinutes: 20, // 20 game minutes
-      material_requirements: [],
+      baseDurationMinutes: 15,
+      materialConsumption: [
+        { itemId: 'mechanical-assembly', count: 1, tags: [ItemTag.ASSEMBLY, ItemTag.DAMAGED] }
+      ],
+      materialProduction: [
+        {
+          itemId: 'mechanical-component',
+          count: 4,
+          tags: [ItemTag.ROUGH, ItemTag.LOW_TECH],
+          quality: 25
+        },
+        {
+          itemId: 'mechanical-component',
+          count: 3,
+          tags: [ItemTag.PRECISION, ItemTag.LOW_TECH],
+          quality: 30
+        },
+        {
+          itemId: 'steel-scrap',
+          count: 1,
+          tags: [ItemTag.SALVAGED],
+          quality: 20
+        }
+      ],
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 3: Component Repair (Workbench)
+    // Operation 3: Rough Milling - Create new rough components
     {
-      id: 'restore_repair',
-      name: 'Component Repair',
-      description: 'Repair or replace damaged parts',
+      id: 'restore_comp_rough_milling',
+      name: 'Rough Milling',
+      description: 'Mill new frame and major components',
+      requiredTag: {
+        category: TagCategory.MILLING,
+        minimum: 10,
+        optimal: 30
+      },
+      baseDurationMinutes: 40,
+      materialConsumption: [
+        { itemId: 'steel', count: 0.3 }
+      ],
+      materialProduction: [
+        {
+          itemId: 'mechanical-component',
+          count: 3,
+          tags: [ItemTag.ROUGH, ItemTag.LOW_TECH],
+          quality: 70
+        }
+      ],
+      can_fail: true,
+      failure_chance: 0.05,
+      labor_skill: 'skilled_machinist'
+    },
+    
+    // Operation 4: Precision Turning - Upgrade some rough to precision
+    {
+      id: 'restore_comp_precision_turning',
+      name: 'Precision Turning',
+      description: 'Turn barrel and precision components',
+      requiredTag: {
+        category: TagCategory.TURNING,
+        minimum: 8,
+        optimal: 20
+      },
+      baseDurationMinutes: 35,
+      materialConsumption: [
+        { itemId: 'mechanical-component', count: 2, tags: [ItemTag.ROUGH] }
+      ],
+      materialProduction: [
+        {
+          itemId: 'mechanical-component',
+          count: 2,
+          tags: [ItemTag.PRECISION, ItemTag.LOW_TECH],
+          quality: 85
+        }
+      ],
+      can_fail: true,
+      failure_chance: 0.08,
+      labor_skill: 'skilled_machinist'
+    },
+    
+    // Operation 5: Component Assembly - Combine all components
+    {
+      id: 'restore_comp_assembly',
+      name: 'Component Assembly',
+      description: 'Assemble all components',
+      requiredTag: {
+        category: TagCategory.BASIC_MANIPULATION,
+        minimum: 10
+      },
+      baseDurationMinutes: 25,
+      materialConsumption: [
+        { itemId: 'mechanical-component', count: 5, tags: [ItemTag.ROUGH] },
+        { itemId: 'mechanical-component', count: 5, tags: [ItemTag.PRECISION] }
+      ],
+      materialProduction: [
+        {
+          itemId: 'mechanical-assembly',
+          count: 1,
+          tags: [ItemTag.ASSEMBLY, ItemTag.LOW_TECH],
+          quality: 75
+        }
+      ],
+      can_fail: true,
+      failure_chance: 0.03,
+      labor_skill: 'skilled_technician'
+    },
+    
+    // Operation 6: Shape Casing - Create new casing
+    {
+      id: 'restore_comp_shape_casing',
+      name: 'Shape Casing',
+      description: 'Shape a new outer casing',
       requiredTag: {
         category: TagCategory.SURFACE,
         minimum: 2
       },
-      baseDurationMinutes: 30, // 30 game minutes
-      material_requirements: [
-        { material_id: 'low_tech_spares', quantity: 0.2, consumed_at_start: true }
+      baseDurationMinutes: 28,
+      materialConsumption: [
+        { itemId: 'plastic', count: 0.5 }
+      ],
+      materialProduction: [
+        {
+          itemId: 'plastic-casing',
+          count: 1,
+          tags: [ItemTag.CASING, ItemTag.LOW_TECH],
+          quality: 75
+        }
       ],
       can_fail: true,
-      failure_chance: 0.08,
-      failure_result: 'downgrade',
+      failure_chance: 0.02,
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 4: Reassembly (Hand Tools)
+    // Operation 7: Final Assembly - Combine assembly and casing
     {
-      id: 'restore_reassembly',
-      name: 'Reassembly',
-      description: 'Reassemble restored weapon',
+      id: 'restore_comp_final_assembly',
+      name: 'Final Assembly',
+      description: 'Fine adjustments and fitting',
       requiredTag: {
-        category: TagCategory.BASIC_MANIPULATION,
-        minimum: 8,
-        optimal: 15
+        category: TagCategory.PRECISION_MANIPULATION,
+        minimum: 8
       },
-      baseDurationMinutes: 15, // 15 game minutes
-      material_requirements: [],
-      can_fail: false,
-      failure_chance: 0,
+      baseDurationMinutes: 15,
+      materialConsumption: [
+        { itemId: 'mechanical-assembly', count: 1, tags: [ItemTag.ASSEMBLY] },
+        { itemId: 'plastic-casing', count: 1, tags: [ItemTag.CASING] }
+      ],
+      materialProduction: [
+        {
+          itemId: 'basic_sidearm',
+          count: 1,
+          tags: [ItemTag.RESTORED, ItemTag.LOW_TECH],
+          inheritQuality: true
+        }
+      ],
+      can_fail: true,
+      failure_chance: 0.02,
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 5: Function Test (Measuring Tools)
+    // Operation 8: Quality Control - Final inspection
     {
-      id: 'restore_test',
-      name: 'Function Test',
-      description: 'Test restored weapon functionality',
+      id: 'restore_comp_quality_control',
+      name: 'Quality Control',
+      description: 'Test and verify specifications',
       requiredTag: {
         category: TagCategory.MEASURING,
         minimum: true
       },
-      baseDurationMinutes: 10, // 10 game minutes
-      material_requirements: [],
+      baseDurationMinutes: 10,
+      // QC just verifies - no material transformation
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'quality_inspector'
     }
   ],
   
-  // Legacy output configuration
+  // Method properties
   output_state: 'functional',
   output_quality_range: [60, 80],
-  labor_cost_multiplier: 0.8,
-  complexity_rating: 3,
-  profit_margin_modifier: 0.9,
-  required_facility_traits: [],
-  customer_appeal: ['rebel', 'mercenary', 'civilian']
+  labor_cost_multiplier: 0.9,
+  complexity_rating: 7,
+  profit_margin_modifier: 0.8,
+  customer_appeal: ['budget_conscious', 'restoration_specialists', 'component_enthusiasts']
 };
 
-// Basic Sidearm - Cobble Method
-export const basicSidearmCobbleMethod: MachineBasedMethod = {
-  id: 'basic_sidearm_cobble',
-  name: 'Cobble Together',
-  description: 'Create a crude but functional weapon from scrap',
+// NEW: Disassembly Methods for Basic Sidearm
+
+// Disassemble Pristine/Good Quality Sidearm 
+export const basicSidearmDisassemblePristineMethod: MachineBasedMethod = {
+  id: 'basic_sidearm_disassemble_pristine_component',
+  name: 'Disassemble (Good Condition)',
+  description: 'Carefully disassemble a functional sidearm to recover high-quality components',
   
-  // Output configuration for new inventory system
-  outputTags: [ItemTag.JUNK],
-  qualityRange: [30, 45],
-  qualityCap: 45,
+  // Output configuration
+  outputTags: [ItemTag.SALVAGED],
+  qualityRange: [60, 85],
   
   operations: [
-    // Operation 1: Improvised Assembly (Workbench)
+    // Operation 1: Safety Check
     {
-      id: 'cobble_assembly',
-      name: 'Improvised Assembly',
-      description: 'Cobble together functional weapon',
-      requiredTag: {
-        category: TagCategory.SURFACE,
-        minimum: 2
-      },
-      baseDurationMinutes: 15, // 15 game minutes
-      material_requirements: [
-        { material_id: 'steel', quantity: 0.5, consumed_at_start: true },
-        { material_id: 'basic_electronics', quantity: 1, consumed_at_start: true }
-      ],
-      can_fail: true,
-      failure_chance: 0.15,
-      failure_result: 'scrap',
-      labor_skill: 'unskilled'
-    },
-    
-    // Operation 2: Basic Fitting (Hand Tools)
-    {
-      id: 'cobble_fitting',
-      name: 'Basic Fitting',
-      description: 'Make parts fit together',
-      requiredTag: {
-        category: TagCategory.BASIC_MANIPULATION,
-        minimum: 5,
-        optimal: 15
-      },
-      baseDurationMinutes: 10, // 10 game minutes  
-      material_requirements: [],
-      can_fail: true,
-      failure_chance: 0.1,
-      failure_result: 'scrap',
-      labor_skill: 'unskilled'
-    }
-  ],
-  
-  // Legacy output configuration
-  output_state: 'junk',
-  output_quality_range: [30, 50],
-  labor_cost_multiplier: 0.5,
-  complexity_rating: 2,
-  profit_margin_modifier: 0.6,
-  required_facility_traits: [],
-  customer_appeal: ['rebel', 'pirate', 'desperate']
-};
-
-// Export all methods for a product
-export const basicSidearmMethods = [
-  basicSidearmForgeMethod,
-  basicSidearmRestoreMethod,
-  basicSidearmCobbleMethod
-];
-
-// ===== TACTICAL KNIFE METHODS =====
-
-// Tactical Knife - Forge New Method
-export const tacticalKnifeForgeMethod: MachineBasedMethod = {
-  id: 'tactical_knife_forge',
-  name: 'Forge New',
-  description: 'Craft a high-quality tactical knife from raw materials',
-  
-  // Output configuration for new inventory system
-  outputTags: [ItemTag.FORGED],
-  qualityRange: [85, 98],
-  
-  operations: [
-    // Operation 1: Material Preparation (Workbench)
-    {
-      id: 'knife_material_prep',
-      name: 'Material Preparation',
-      description: 'Cut and prepare steel stock',
-      requiredTag: {
-        category: TagCategory.SURFACE,
-        minimum: 2
-      },
-      baseDurationMinutes: 8,
-      material_requirements: [
-        { material_id: 'steel', quantity: 0.5, consumed_at_start: true },
-        { material_id: 'aluminum', quantity: 0.2, consumed_at_start: true }
-      ],
-      can_fail: false,
-      failure_chance: 0,
-      labor_skill: 'unskilled'
-    },
-    
-    // Operation 2: Rough Shaping (Mill)
-    {
-      id: 'knife_rough_shaping',
-      name: 'Rough Shaping',
-      description: 'Mill basic blade profile',
-      requiredTag: {
-        category: TagCategory.MILLING,
-        minimum: 8,
-        optimal: 20
-      },
-      baseDurationMinutes: 25,
-      material_requirements: [],
-      can_fail: true,
-      failure_chance: 0.03,
-      failure_result: 'scrap',
-      labor_skill: 'skilled_machinist'
-    },
-    
-    // Operation 3: Blade Turning (Lathe)
-    {
-      id: 'knife_blade_turning',
-      name: 'Blade Finishing',
-      description: 'Turn and finish blade edge geometry',
-      requiredTag: {
-        category: TagCategory.TURNING,
-        minimum: 6,
-        optimal: 15
-      },
-      baseDurationMinutes: 20,
-      material_requirements: [],
-      can_fail: true,
-      failure_chance: 0.05,
-      failure_result: 'downgrade',
-      labor_skill: 'skilled_machinist'
-    },
-    
-    // Operation 4: Handle Assembly (Hand Tools)
-    {
-      id: 'knife_handle_assembly',
-      name: 'Handle Assembly',
-      description: 'Assemble and fit handle components',
-      requiredTag: {
-        category: TagCategory.PRECISION_MANIPULATION,
-        minimum: 5,
-        optimal: 12
-      },
-      baseDurationMinutes: 15,
-      material_requirements: [],
-      can_fail: true,
-      failure_chance: 0.02,
-      failure_result: 'downgrade',
-      labor_skill: 'skilled_technician'
-    },
-    
-    // Operation 5: Final Sharpening (Hand Tools)
-    {
-      id: 'knife_final_sharpening',
-      name: 'Edge Sharpening',
-      description: 'Sharpen and hone final edge',
-      requiredTag: {
-        category: TagCategory.BASIC_MANIPULATION,
-        minimum: 8,
-        optimal: 15
-      },
-      baseDurationMinutes: 12,
-      material_requirements: [],
-      can_fail: false,
-      failure_chance: 0,
-      labor_skill: 'skilled_technician'
-    },
-    
-    // Operation 6: Quality Inspection (Measuring Tools)
-    {
-      id: 'knife_quality_inspection',
-      name: 'Quality Inspection',
-      description: 'Test sharpness and verify specifications',
+      id: 'disassemble_pristine_safety',
+      name: 'Safety Check',
+      description: 'Ensure weapon is unloaded and safe to disassemble',
       requiredTag: {
         category: TagCategory.MEASURING,
         minimum: true
       },
       baseDurationMinutes: 5,
-      material_requirements: [],
+      // No material transformation - just verification
+      can_fail: false,
+      failure_chance: 0,
+      labor_skill: 'skilled_technician'
+    },
+    
+    // Operation 2: Remove Casing - Sidearm → Casing + Assembly
+    {
+      id: 'disassemble_pristine_uncasing',
+      name: 'Remove Casing',
+      description: 'Carefully remove the outer plastic casing',
+      requiredTag: {
+        category: TagCategory.BASIC_MANIPULATION,
+        minimum: 10
+      },
+      baseDurationMinutes: 15,
+      materialConsumption: [
+        { itemId: 'basic_sidearm', count: 1 }
+      ],
+      materialProduction: [
+        {
+          itemId: 'plastic-casing',
+          count: 1,
+          tags: [ItemTag.CASING, ItemTag.LOW_TECH],
+          inheritQuality: true
+        },
+        {
+          itemId: 'mechanical-assembly',
+          count: 1,
+          tags: [ItemTag.ASSEMBLY, ItemTag.LOW_TECH],
+          inheritQuality: true
+        }
+      ],
+      can_fail: false,
+      failure_chance: 0,
+      labor_skill: 'skilled_technician'
+    },
+    
+    // Operation 3: Component Inspection
+    {
+      id: 'disassemble_pristine_inspection',
+      name: 'Component Inspection',
+      description: 'Inspect and catalog recovered components',
+      requiredTag: {
+        category: TagCategory.MEASURING,
+        minimum: true
+      },
+      baseDurationMinutes: 10,
+      // No material transformation - just verification
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'quality_inspector'
     }
   ],
   
-  // Legacy output configuration
-  output_state: 'pristine',
-  output_quality_range: [85, 98],
-  labor_cost_multiplier: 1.3,
-  complexity_rating: 4,
-  profit_margin_modifier: 1.4,
-  required_facility_traits: [],
-  customer_appeal: ['military', 'survival', 'collector']
+  // Method properties
+  output_state: 'functional',
+  output_quality_range: [60, 85],
+  labor_cost_multiplier: 0.5,
+  complexity_rating: 2,
+  profit_margin_modifier: 0.6,
+  customer_appeal: ['salvage_operations', 'component_dealers', 'recyclers']
 };
 
-// Tactical Knife - Restore Method
-export const tacticalKnifeRestoreMethod: MachineBasedMethod = {
-  id: 'tactical_knife_restore',
-  name: 'Restore Damaged',
-  description: 'Restore a damaged knife to functional condition',
+// Disassemble Damaged Sidearm
+export const basicSidearmDisassembleDamagedMethod: MachineBasedMethod = {
+  id: 'basic_sidearm_disassemble_damaged_component',
+  name: 'Disassemble (Damaged)',
+  description: 'Salvage what components you can from a damaged sidearm',
   
-  // Output configuration for new inventory system
-  outputTags: [ItemTag.RESTORED],
-  qualityRange: [70, 85],
+  // Output configuration
+  outputTags: [ItemTag.DAMAGED, ItemTag.SALVAGED],
+  qualityRange: [15, 35],
   
   operations: [
-    // Operation 1: Damage Assessment (Measuring Tools)
+    // Operation 1: Safety Check
     {
-      id: 'knife_damage_assessment',
-      name: 'Damage Assessment',
-      description: 'Evaluate damage and plan restoration',
+      id: 'disassemble_damaged_safety',
+      name: 'Safety Check', 
+      description: 'Check damaged weapon for safety hazards',
       requiredTag: {
         category: TagCategory.MEASURING,
         minimum: true
       },
-      baseDurationMinutes: 8,
-      material_requirements: [
-        { material_id: 'tactical_knife', quantity: 1, consumed_at_start: true, required_tags: [ItemTag.SALVAGED], max_quality: 35 }
-      ],
+      baseDurationMinutes: 5,
+      // No material transformation - just verification
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'skilled_technician'
     },
     
-    // Operation 2: Blade Repair (Mill or Hand Tools)
+    // Operation 2: Force Disassembly - Damaged Sidearm → Scrap + Damaged Assembly
     {
-      id: 'knife_blade_repair',
-      name: 'Blade Repair',
-      description: 'Repair chips and damage',
-      requiredTag: {
-        category: TagCategory.BASIC_MANIPULATION,
-        minimum: 10,
-        optimal: 15
-      },
-      baseDurationMinutes: 18,
-      material_requirements: [
-        { material_id: 'machined_parts', quantity: 0.5, consumed_at_start: true }
-      ],
-      can_fail: true,
-      failure_chance: 0.06,
-      failure_result: 'downgrade',
-      labor_skill: 'skilled_technician'
-    },
-    
-    // Operation 3: Re-sharpening (Hand Tools)
-    {
-      id: 'knife_resharpening',
-      name: 'Re-sharpening',
-      description: 'Restore sharp edge',
-      requiredTag: {
-        category: TagCategory.PRECISION_MANIPULATION,
-        minimum: 6
-      },
-      baseDurationMinutes: 15,
-      material_requirements: [],
-      can_fail: false,
-      failure_chance: 0,
-      labor_skill: 'skilled_technician'
-    },
-    
-    // Operation 4: Handle Refurbishment (Hand Tools)
-    {
-      id: 'knife_handle_refurb',
-      name: 'Handle Refurbishment',
-      description: 'Clean and repair handle',
+      id: 'disassemble_damaged_breakdown',
+      name: 'Force Disassembly',
+      description: 'Forcefully remove damaged casing and internals',
       requiredTag: {
         category: TagCategory.BASIC_MANIPULATION,
         minimum: 8
+      },
+      baseDurationMinutes: 20,
+      materialConsumption: [
+        { itemId: 'basic_sidearm', count: 1, tags: [ItemTag.DAMAGED] }
+      ],
+      materialProduction: [
+        {
+          itemId: 'plastic-scrap',
+          count: 1,
+          tags: [ItemTag.SALVAGED],
+          quality: 15
+        },
+        {
+          itemId: 'mechanical-assembly',
+          count: 1,
+          tags: [ItemTag.ASSEMBLY, ItemTag.LOW_TECH, ItemTag.DAMAGED],
+          quality: 20
+        }
+      ],
+      can_fail: true,
+      failure_chance: 0.1, // 10% chance to destroy everything
+      labor_skill: 'skilled_technician'
+    },
+    
+    // Operation 3: Salvage Assessment
+    {
+      id: 'disassemble_damaged_assessment',
+      name: 'Salvage Assessment',
+      description: 'Assess value of recovered materials',
+      requiredTag: {
+        category: TagCategory.MEASURING,
+        minimum: true
       },
       baseDurationMinutes: 10,
-      material_requirements: [],
+      // No material transformation - just assessment
       can_fail: false,
       failure_chance: 0,
-      labor_skill: 'unskilled'
+      labor_skill: 'quality_inspector'
     }
   ],
   
-  // Legacy output configuration
-  output_state: 'functional',
-  output_quality_range: [70, 85],
-  labor_cost_multiplier: 0.7,
-  complexity_rating: 2,
-  profit_margin_modifier: 0.8,
-  required_facility_traits: [],
-  customer_appeal: ['survival', 'budget', 'practical']
-};
-
-// Tactical Knife - Quick Sharpen Method
-export const tacticalKnifeSharpenMethod: MachineBasedMethod = {
-  id: 'tactical_knife_sharpen',
-  name: 'Quick Sharpen',
-  description: 'Rapidly sharpen dull knives for resale',
-  
-  // Output configuration for new inventory system
-  outputTags: [ItemTag.REFURBISHED],
-  qualityRange: [65, 80],
-  
-  operations: [
-    // Operation 1: Edge Assessment (Hand Tools)
-    {
-      id: 'knife_edge_assessment',
-      name: 'Edge Assessment',
-      description: 'Check current edge condition',
-      requiredTag: {
-        category: TagCategory.BASIC_MANIPULATION,
-        minimum: 5
-      },
-      baseDurationMinutes: 3,
-      material_requirements: [
-        { material_id: 'tactical_knife', quantity: 1, consumed_at_start: true, required_tags: [ItemTag.SALVAGED], max_quality: 55 }
-      ],
-      can_fail: false,
-      failure_chance: 0,
-      labor_skill: 'unskilled'
-    },
-    
-    // Operation 2: Quick Sharpening (Hand Tools)
-    {
-      id: 'knife_quick_sharpen',
-      name: 'Quick Sharpening',
-      description: 'Fast edge restoration',
-      requiredTag: {
-        category: TagCategory.BASIC_MANIPULATION,
-        minimum: 8
-      },
-      baseDurationMinutes: 8,
-      material_requirements: [],
-      can_fail: true,
-      failure_chance: 0.08,
-      failure_result: 'downgrade',
-      labor_skill: 'unskilled'
-    }
-  ],
-  
-  // Legacy output configuration
-  output_state: 'functional',
-  output_quality_range: [60, 75],
+  // Method properties
+  output_state: 'junk',
+  output_quality_range: [15, 35],
   labor_cost_multiplier: 0.4,
-  complexity_rating: 1,
-  profit_margin_modifier: 0.6,
-  required_facility_traits: [],
-  customer_appeal: ['budget', 'quick_turnaround']
+  complexity_rating: 2,
+  profit_margin_modifier: 0.4,
+  customer_appeal: ['scrap_dealers', 'budget_operations', 'salvagers']
 };
 
-// Export tactical knife methods
-export const tacticalKnifeMethods = [
-  tacticalKnifeForgeMethod,
-  tacticalKnifeRestoreMethod,
-  tacticalKnifeSharpenMethod
+export const basicSidearmMethods = [
+  basicSidearmComponentMethod,        // Primary component-based forge method
+  basicSidearmRestoreComponentMethod,  // Component-based restore method
+  basicSidearmDisassemblePristineMethod, // NEW: Disassemble good condition
+  basicSidearmDisassembleDamagedMethod,  // NEW: Disassemble damaged condition
 ];
+
+// ===== TACTICAL KNIFE METHODS REMOVED =====
+// Tactical knife methods have been removed as requested.
+// They will be re-implemented in Manufacturing v2 with full component system.
+
+// Empty export for compatibility
+export const tacticalKnifeMethods: MachineBasedMethod[] = [];

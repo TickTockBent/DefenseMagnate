@@ -45,12 +45,30 @@ export interface MachineOperation {
   
   // Time and resources
   baseDurationMinutes: number; // In game minutes
-  material_requirements: Array<{
+  
+  // LEGACY: material_requirements (deprecated in favor of consumption/production)
+  material_requirements?: Array<{
     material_id: string;
     quantity: number;
     consumed_at_start: boolean;
     required_tags?: ItemTag[]; // Items must have these tags to be consumed
     max_quality?: number; // Items must be below this quality level to be consumed
+  }>;
+  
+  // NEW: Material transformation system
+  materialConsumption?: Array<{
+    itemId: string;
+    count: number;
+    tags?: ItemTag[]; // Required tags for consumed items
+    maxQuality?: number; // Maximum quality to consume
+  }>;
+  
+  materialProduction?: Array<{
+    itemId: string;
+    count: number;
+    tags?: ItemTag[]; // Tags to apply to produced items
+    quality?: number; // Quality to set (if not inherited)
+    inheritQuality?: boolean; // Whether to inherit quality from consumed materials
   }>;
   
   // Quality and failure
@@ -111,6 +129,10 @@ export interface MachineSlotJob {
   currentMachineId?: string; // Which machine is processing this
   currentOperationIndex: number; // Which operation we're on
   completedOperations: string[]; // IDs of completed operations
+  
+  // Job sub-inventory system (NEW)
+  jobInventory: import('./inventory').FacilityInventory; // Job's own inventory for materials and products
+  operationProducts: Map<number, import('./items').ItemInstance[]>; // Track what each operation produced
   
   // Material tracking (for legacy compatibility)
   consumedMaterials?: Map<string, number>;

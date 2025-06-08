@@ -1,17 +1,15 @@
 import { useGameStore } from '../state/gameStoreWithEquipment'
 import { useState } from 'react'
-import { ItemCategory, ItemInstance } from '../types'
+import { ItemInstance } from '../types'
 import { getDisplayName, getQualityDescription } from '../utils/itemSystem'
 import { baseItems } from '../data/baseItems'
 
 export function ResourcePanel() {
-  const resources = useGameStore((state) => state.resources)
   const selectedFacilityId = useGameStore((state) => state.selectedFacilityId)
   const facilities = useGameStore((state) => state.facilities)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   const selectedFacility = facilities.find(f => f.id === selectedFacilityId)
-  const resourceEntries = Object.entries(resources)
   const materialEntries = selectedFacility ? Object.entries(selectedFacility.current_storage) : []
   
   const toggleGroup = (groupId: string) => {
@@ -26,21 +24,6 @@ export function ResourcePanel() {
 
   return (
     <div className="space-y-6">
-      {/* Resources */}
-      <div className="terminal-card">
-        <div className="terminal-header">
-          <span className="ascii-accent">◆</span> RESOURCES
-        </div>
-        <div className="space-y-3">
-          {resourceEntries.map(([name, amount]) => (
-            <div key={name} className="flex justify-between items-center">
-              <span className="text-gray-400 text-sm">{name}</span>
-              <span className="font-mono text-teal-400">{amount.toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* New Inventory System */}
       {selectedFacility?.inventory && (
         <div className="terminal-card">

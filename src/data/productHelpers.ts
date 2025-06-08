@@ -1,5 +1,6 @@
-// Product helper functions that don't import the Product interface directly
-// This avoids the runtime import issue
+// LEGACY: Product helper functions for old manufacturing system
+// SUPERSEDED BY: Component-based manufacturing in manufacturingMethods.ts
+// This file is maintained for potential future use but not currently active
 
 import { ManufacturingMethod, ProductState, TagCategory, TagRequirement } from '../types';
 import { upgradeManufacturingMethod } from '../utils/upgradeManufacturingSteps';

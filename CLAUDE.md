@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Defense Magnate is a single-player, browser-playable real-time management simulation game where players run an arms manufacturing company in a fractured galactic warzone. The game operates in real-time with a 1 minute = 1 game hour time scale, allowing players to watch their production lines progress naturally. The game is built as a web application with no backend, using browser localStorage for saves and compressed string codes for save portability.
 
-**Current Status**: Materials & Contracts v1 Complete - Full economic foundation with material standardization, dynamic markets, customer contracts, and tag-based inventory system implemented and functional.
+**Current Status**: Disassembly v1 Complete - Component-based manufacturing system with job cancellation, material recovery, disassembly operations, and unified job management UI fully implemented and functional.
 
 ## Technology Stack
 
@@ -240,10 +240,19 @@ facility.equipment_capacity = new Map([
 - Machine workspace system with facility-wide job queues
 - Single-machine operation architecture with tag-based equipment matching
 - Real-time job flow through multiple machines automatically
-- Two complete product lines with 6 total manufacturing methods
+- Component-based manufacturing with intermediate product tracking
 - Job completion notifications with thematic machine activity indicators
 - Product dropdown selection with detailed method breakdowns
 - Full equipment database with 6 machine types and thematic spinners
+
+**✅ Disassembly v1 Complete**:
+- Component-based manufacturing system with job sub-inventories
+- Material transformation tracking through all operations
+- Job cancellation with partial material recovery at any stage
+- Disassembly methods for pristine and damaged sidearms
+- Unified job management UI with persistent expansion states
+- Real-time progress tracking with operation-level visibility
+- Completed job lingering with automatic cleanup
 
 **🚧 Next Priority**: Supply Contracts & Reputation system for business relationships
 
@@ -259,15 +268,16 @@ The game starts with a fully equipped garage containing:
 
 ### Available Products & Methods
 
-**Basic Sidearm (6 operations, 135 min total)**:
-- **Forge New**: Premium quality from steel + plastic → pristine quality
-- **Restore Damaged**: Repair damaged weapons → functional quality  
-- **Cobble Together**: Quick assembly → junk quality
+**Basic Sidearm (Component-Based Manufacturing)**:
+- **Forge New (Component-Based)**: 7 operations, ~173 min - Create new sidearm from raw materials with component transformation
+- **Restore Damaged (Component-Based)**: 8 operations, ~183 min - Restore damaged weapon using component breakdown and rebuilding  
+- **Disassemble (Good Condition)**: 3 operations, ~30 min - Carefully disassemble functional sidearm to recover high-quality components
+- **Disassemble (Damaged)**: 3 operations, ~35 min - Salvage components from damaged sidearms for reuse
 
-**Tactical Knife (2-6 operations, 11-85 min total)**:
-- **Forge New**: High-quality blade from steel + aluminum → pristine quality
-- **Restore Damaged**: Repair damaged knives → functional quality
-- **Quick Sharpen**: Fast edge restoration → functional quality
+**Component Flow Examples**:
+- Steel → Rough Components → Precision Components → Assembly → Final Product
+- Damaged Sidearm → Plastic Scrap + Damaged Assembly (for restoration)
+- Pristine Sidearm → Plastic Casing + Mechanical Assembly (for reuse)
 
 ### Material Inventory
 Starting materials support immediate testing:
