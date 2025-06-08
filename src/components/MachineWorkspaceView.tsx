@@ -344,8 +344,30 @@ interface UnifiedJobListProps {
 function UnifiedJobList({ workspace, allJobs }: UnifiedJobListProps) {
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
-  const [completedJobTimers, setCompletedJobTimers] = useState<Map<string, number>>(new Map());
   const cancelMachineJob = useGameStore(state => state.cancelMachineJob);
+  const gameTime = useGameStore(state => state.gameTime);
+  
+  // Helper function to get current operation progress for a job
+  const getJobProgress = (job: MachineSlotJob) => {
+    if (job.state !== 'in_progress' || !job.currentMachineId) {
+      return null;
+    }
+    
+    const machineSlot = workspace.machines.get(job.currentMachineId);
+    if (!machineSlot || !machineSlot.currentProgress) {
+      return null;
+    }
+    
+    const progress = machineSlot.currentProgress;
+    const elapsed = gameTime.totalGameHours - progress.startTime;
+    const duration = progress.estimatedCompletion - progress.startTime;
+    const percentage = duration > 0 ? Math.min(100, Math.max(0, (elapsed / duration) * 100)) : 0;
+    
+    return {
+      currentOperation: job.method.operations[job.currentOperationIndex]?.name || 'Unknown',
+      percentage: Math.round(percentage)
+    };
+  };
   
   // Collect all jobs: active (from machines), queued, and recently completed
   const activeJobs = Array.from(workspace.machines.values())
@@ -353,50 +375,30 @@ function UnifiedJobList({ workspace, allJobs }: UnifiedJobListProps) {
     .filter((job): job is MachineSlotJob => job !== null && job !== undefined);
   
   const queuedJobs = workspace.jobQueue || [];
-  const recentCompletedJobs = (workspace.completedJobs || []).slice(-5); // Last 5 completed jobs
+  
+  // Filter completed jobs that are less than 5 seconds old (using game time)
+  const currentGameTime = gameTime.totalGameHours;
+  const recentCompletedJobs = (workspace.completedJobs || [])
+    .filter(job => {
+      if (!job || !job.completedAt) return false;
+      // Convert 5 seconds real time to game time (5 seconds = 5/3600 game hours at 1x speed)
+      const gameTimeWindow = (5 / 3600) * gameTime.gameSpeed; // Adjust for game speed
+      return (currentGameTime - job.completedAt) <= gameTimeWindow;
+    })
+    .slice(-5); // Still limit to last 5 for performance
   
   // Combine all jobs and filter out any undefined/null entries
   const combinedJobs = [...activeJobs, ...queuedJobs, ...recentCompletedJobs]
     .filter((job): job is MachineSlotJob => job !== null && job !== undefined);
   
-  // Filter out completed jobs that have been showing for more than 5 seconds
-  const currentTime = Date.now();
+  // No need for complex timer logic - just use the filtered list
   const visibleJobs = combinedJobs.filter(job => {
     // Double-check job is defined
     if (!job || !job.id) {
       return false;
     }
-    
-    if (job.state === 'completed') {
-      const completedTime = completedJobTimers.get(job.id);
-      if (completedTime && (currentTime - completedTime) > 5000) {
-        return false; // Hide after 5 seconds
-      }
-      if (!completedTime) {
-        // First time seeing this completed job, start timer
-        setCompletedJobTimers(prev => new Map(prev).set(job.id, currentTime));
-      }
-    }
     return true;
   });
-  
-  // Clean up old timers
-  useEffect(() => {
-    const cleanup = setInterval(() => {
-      const now = Date.now();
-      setCompletedJobTimers(prev => {
-        const updated = new Map(prev);
-        for (const [jobId, time] of updated) {
-          if (now - time > 6000) { // Clean up after 6 seconds (1 second buffer)
-            updated.delete(jobId);
-          }
-        }
-        return updated;
-      });
-    }, 1000);
-    
-    return () => clearInterval(cleanup);
-  }, []);
   
   const handleCancelJob = (jobId: string, facilityId: string) => {
     cancelMachineJob(facilityId, jobId);
@@ -500,6 +502,19 @@ function UnifiedJobList({ workspace, allJobs }: UnifiedJobListProps) {
                           Next: {job.method.operations[job.currentOperationIndex]?.name}
                         </div>
                       )}
+                      
+                      {job.state === 'in_progress' && (() => {
+                        const progress = getJobProgress(job);
+                        return progress ? (
+                          <div className="text-xs text-yellow-300 mt-1">
+                            Current: {progress.currentOperation} ({progress.percentage}%)
+                          </div>
+                        ) : (
+                          <div className="text-xs text-yellow-300 mt-1">
+                            Current: {job.method.operations[job.currentOperationIndex]?.name || 'Processing...'}
+                          </div>
+                        );
+                      })()}
                     </div>
                     
                     {canCancel && (
