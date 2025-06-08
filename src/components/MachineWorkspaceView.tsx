@@ -95,12 +95,14 @@ function MachineCard({ equipment, definition, slot, currentTime }: MachineCardPr
     }
     
     // Calculate real-time progress using actual time passage
-    const msPerGameHour = 60000 / gameSpeed; // 1 game hour = 60000ms / gameSpeed
+    // NOTE: 1 game hour = 60 seconds real time at 1x speed, adjusted by gameSpeed
+    const msPerGameHour = 60000; // Base: 1 game hour = 60 seconds real time
     const lastUpdateTime = slot.currentProgress.lastUpdateTime || realTimeMs;
     
     // Calculate how much game time has passed since the last store update
+    // The store's currentTime is already speed-adjusted, so we need to match that rate
     const realTimeSinceUpdate = realTimeMs - lastUpdateTime;
-    const gameTimeSinceUpdate = realTimeSinceUpdate / msPerGameHour;
+    const gameTimeSinceUpdate = (realTimeSinceUpdate / msPerGameHour) * gameSpeed;
     
     // Add interpolated time to the store's current time
     const interpolatedCurrentTime = currentTime + gameTimeSinceUpdate;
