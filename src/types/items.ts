@@ -1,6 +1,8 @@
 // Unified Item System Types
 // Replaces fragmented item variants with base items + tags + quality
 
+import { ItemManufacturingType } from './manufacturing';
+
 export enum ItemCategory {
   MATERIAL = 'material',
   PRODUCT = 'product', 
@@ -31,6 +33,26 @@ export enum ItemTag {
   CASING = 'casing',            // External housing/protection
   LOW_TECH = 'low-tech',        // Basic technology level
   
+  // Enhancement Tags (Manufacturing v2 Phase 2)
+  REINFORCED = 'reinforced',     // Additional material reinforcement
+  LIGHTWEIGHT = 'lightweight',   // Weight-optimized design
+  POLISHED = 'polished',        // High-quality surface finish
+  MODULAR = 'modular',          // Designed for easy maintenance/upgrades
+  FIELD_SERVICEABLE = 'field_serviceable', // Tool-free maintenance
+  COMPETITION_GRADE = 'competition_grade', // Tournament-grade precision
+  TACTICAL = 'tactical',        // Military/tactical configuration
+  FIELD_READY = 'field_ready',  // Ready for field deployment
+  
+  // Environmental Condition Tags (Manufacturing v2 Phase 3)
+  DRENCHED = 'drenched',        // Water damage - needs drying treatment
+  CORRODED = 'corroded',        // Corrosion damage - needs chemical treatment
+  HEAT_DAMAGED = 'heat_damaged', // Heat damage - needs re-tempering
+  CONTAMINATED = 'contaminated', // Chemical contamination - needs decontamination
+  FROZEN = 'frozen',            // Cold damage - needs careful thawing
+  RADIATION_EXPOSED = 'radiation_exposed', // Radiation damage - needs decontamination
+  IMPACT_DAMAGED = 'impact_damaged', // Physical trauma - structural assessment needed
+  WORN = 'worn',               // General wear - refurbishment needed
+  
   // Special Tags
   PROTOTYPE = 'prototype',       // Experimental items with unique properties
   CUSTOM = 'custom',            // Player-customized items
@@ -46,6 +68,17 @@ export interface BaseItem {
   description: string;          // Item description
   stackable: boolean;           // Can multiple instances be combined
   defaultTags: ItemTag[];       // Tags that are always present
+  manufacturingType: ItemManufacturingType; // Manufacturing v2: hierarchy classification
+  materialSource?: string;      // For shaped materials: which raw material they come from
+  assemblyComponents?: ComponentRequirement[]; // For assemblies: what parts they need
+}
+
+// Component requirement for assemblies
+export interface ComponentRequirement {
+  componentId: string;
+  quantity: number;
+  requiredTags?: ItemTag[];
+  maxQuality?: number;
 }
 
 export interface TagEffect {

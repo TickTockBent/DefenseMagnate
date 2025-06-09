@@ -20,6 +20,23 @@ export type {
   LaborSkill
 } from './manufacturing';
 
+// Manufacturing v2 types
+export {
+  ItemManufacturingType,
+  OperationType
+} from './manufacturing';
+
+export type {
+  ManufacturingRule,
+  ComponentRecovery,
+  TreatmentOperation,
+  ConditionAnalysis,
+  RecoveryRisk,
+  ComponentGap,
+  DynamicOperation,
+  ManufacturingPlan
+} from './manufacturing';
+
 export type {
   ProductionJob,
   ProductionQueue,
@@ -66,6 +83,9 @@ export * from './contracts';
 // Unified item system types
 export * from './items';
 export * from './inventory';
+
+// Enhancement system types (Manufacturing v2 Phase 2)
+export * from './enhancement';
 
 // Re-export common utilities
 export * from '../utils/formatters';

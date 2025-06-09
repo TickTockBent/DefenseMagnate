@@ -11,6 +11,7 @@ export enum TagCategory {
   TURNING = 'turning',
   MILLING = 'milling',
   DRILLING = 'drilling',
+  BORING = 'boring',
   GRINDING = 'grinding',
   CUTTING = 'cutting',
   WELDING = 'welding',

@@ -1,10 +1,137 @@
 // Manufacturing system type definitions
 
 import { ProductState, LaborSkill } from '../constants/enums';
+import { ItemTag } from './items';
 
 // Re-export these for barrel export
 export type { ProductState, LaborSkill } from '../constants/enums';
 import type { TagRequirement } from './equipment';
+
+// ===== MANUFACTURING V2 TYPES =====
+
+// Manufacturing hierarchy for v2 system
+export enum ItemManufacturingType {
+  RAW_MATERIAL = 'raw_material',      // Steel, aluminum, plastic - cannot be disassembled
+  SHAPED_MATERIAL = 'shaped_material', // Steel billet, precision component - cannot be disassembled 
+  ASSEMBLY = 'assembly'               // Mechanical assembly, sidearm - CAN be disassembled
+}
+
+// Manufacturing operation types
+export enum OperationType {
+  SHAPING = 'shaping',        // Raw → Shaped OR Shaped → Better Shaped
+  ASSEMBLY = 'assembly',      // Components → Assembly  
+  DISASSEMBLY = 'disassembly' // Assembly → Components (reverse of assembly only)
+}
+
+// Rules for what operations are allowed on each item type
+export interface ManufacturingRule {
+  canDisassemble: boolean;
+  canShape: boolean;
+  canAssemble: boolean;
+  reason: 'raw_material' | 'shaped_material' | 'assembly';
+}
+
+// Component recovery prediction from condition analysis
+export interface ComponentRecovery {
+  componentType: string;
+  estimatedQuantity: number;
+  expectedQuality: number;
+  confidenceLevel: number; // 0-1 how confident we are in this estimate
+}
+
+// Treatment operations for special conditions
+export interface TreatmentOperation {
+  id: string;
+  name: string;
+  required: boolean;
+  estimatedTime: number; // in game hours
+  materialRequirements: MaterialRequirement[];
+  successProbability: number; // 0-1
+  equipmentRequirements: string[]; // Required equipment tags
+}
+
+// Analysis of input item condition for workflow generation
+export interface ConditionAnalysis {
+  itemId: string;
+  itemType: string;
+  condition: ItemTag[]; // Status tags like [damaged], [drenched], etc.
+  estimatedRecovery: ComponentRecovery[];
+  treatmentRequirements: TreatmentOperation[];
+  risks: RecoveryRisk[];
+  manufacturingType: ItemManufacturingType;
+}
+
+// Risk factors in manufacturing/disassembly
+export interface RecoveryRisk {
+  description: string;
+  probability: number; // 0-1
+  impact: 'component_loss' | 'quality_reduction' | 'time_increase' | 'material_waste';
+  severity: 'low' | 'medium' | 'high';
+}
+
+// Gap between what we need and what we have
+export interface ComponentGap {
+  componentType: string;
+  required: number;
+  available: number;
+  recoverable: number;
+  needToManufacture: number;
+  sourceOperation?: string; // Which operation will create this component
+}
+
+// Dynamic operation created by workflow generator
+export interface DynamicOperation {
+  id: string;
+  name: string;
+  description: string;
+  operationType: OperationType;
+  requiredTag: TagRequirement;
+  baseDurationMinutes: number;
+  
+  // Material transformations
+  materialConsumption?: Array<{
+    itemId: string;
+    count: number;
+    tags?: ItemTag[];
+    maxQuality?: number;
+  }>;
+  materialProduction?: Array<{
+    itemId: string;
+    count: number;
+    tags?: ItemTag[];
+    quality?: number;
+    inheritQuality?: boolean;
+  }>;
+  
+  // Failure mechanics
+  can_fail: boolean;
+  failure_chance: number;
+  labor_skill: LaborSkill;
+  
+  // Dynamic operation metadata
+  generatedReason: string; // Why this operation was created
+  isConditional: boolean; // Whether this operation depends on conditions
+}
+
+// Complete manufacturing plan generated dynamically
+export interface ManufacturingPlan {
+  targetProduct: string;
+  targetQuantity: number;
+  inputAnalysis: ConditionAnalysis[];
+  componentGaps: ComponentGap[];
+  requiredOperations: DynamicOperation[];
+  estimatedDuration: number; // total time in game hours
+  materialRequirements: MaterialRequirement[];
+  enhancementOptions?: import('./enhancement').Enhancement[]; // Available enhancements for this plan
+  
+  // Planning metadata
+  planningTime: number; // When this plan was generated
+  plannerVersion: string; // Version of planning system used
+  confidence: number; // 0-1 confidence in this plan
+}
+
+// DEPRECATED: Enhancement types moved to enhancement.ts (Manufacturing v2 Phase 2)
+// These are kept for temporary compatibility only
 
 // Material requirement for a manufacturing step
 export interface MaterialRequirement {

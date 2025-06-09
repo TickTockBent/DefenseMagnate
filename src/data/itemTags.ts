@@ -157,6 +157,120 @@ export const tagEffects: Record<ItemTag, TagEffect> = {
     qualityMultiplier: 0.9,   // 10% quality penalty - basic technology
     valueMultiplier: 0.7,     // 30% value penalty - simple technology
     description: 'Basic technology level using conventional manufacturing methods'
+  },
+  
+  // Enhancement Tags (Manufacturing v2 Phase 2)
+  [ItemTag.REINFORCED]: {
+    tag: ItemTag.REINFORCED,
+    qualityMultiplier: 1.15,  // 15% quality bonus
+    valueMultiplier: 1.3,     // 30% value bonus
+    description: 'Reinforced construction for enhanced durability'
+  },
+  
+  [ItemTag.LIGHTWEIGHT]: {
+    tag: ItemTag.LIGHTWEIGHT,
+    qualityMultiplier: 1.05,  // 5% quality bonus
+    valueMultiplier: 1.25,    // 25% value bonus
+    description: 'Weight-optimized design without compromising strength'
+  },
+  
+  [ItemTag.POLISHED]: {
+    tag: ItemTag.POLISHED,
+    qualityMultiplier: 1.08,  // 8% quality bonus
+    valueMultiplier: 1.2,     // 20% value bonus
+    description: 'High-quality surface finish and appearance'
+  },
+  
+  [ItemTag.MODULAR]: {
+    tag: ItemTag.MODULAR,
+    qualityMultiplier: 1.0,   // Neutral quality
+    valueMultiplier: 1.4,     // 40% value bonus - utility value
+    description: 'Modular design for easy maintenance and upgrades'
+  },
+  
+  [ItemTag.FIELD_SERVICEABLE]: {
+    tag: ItemTag.FIELD_SERVICEABLE,
+    qualityMultiplier: 1.0,   // Neutral quality
+    valueMultiplier: 1.35,    // 35% value bonus - practical value
+    description: 'Designed for tool-free field maintenance'
+  },
+  
+  [ItemTag.COMPETITION_GRADE]: {
+    tag: ItemTag.COMPETITION_GRADE,
+    qualityMultiplier: 1.2,   // 20% quality bonus
+    valueMultiplier: 1.8,     // 80% value bonus
+    description: 'Tournament-grade precision and performance'
+  },
+  
+  [ItemTag.TACTICAL]: {
+    tag: ItemTag.TACTICAL,
+    qualityMultiplier: 1.12,  // 12% quality bonus
+    valueMultiplier: 1.5,     // 50% value bonus
+    description: 'Military/tactical configuration for operational use'
+  },
+  
+  [ItemTag.FIELD_READY]: {
+    tag: ItemTag.FIELD_READY,
+    qualityMultiplier: 1.08,  // 8% quality bonus
+    valueMultiplier: 1.3,     // 30% value bonus
+    description: 'Ready for immediate field deployment'
+  },
+
+  // Environmental Condition Tags (Manufacturing v2 Phase 3)
+  [ItemTag.DRENCHED]: {
+    tag: ItemTag.DRENCHED,
+    qualityMultiplier: 0.7,   // 30% quality penalty - water damage
+    valueMultiplier: 0.4,     // 60% value penalty - needs treatment
+    description: 'Water damage affecting performance, needs drying treatment'
+  },
+
+  [ItemTag.CORRODED]: {
+    tag: ItemTag.CORRODED,
+    qualityMultiplier: 0.6,   // 40% quality penalty - corrosion damage
+    valueMultiplier: 0.3,     // 70% value penalty - severe deterioration
+    description: 'Corrosion damage affecting structural integrity'
+  },
+
+  [ItemTag.HEAT_DAMAGED]: {
+    tag: ItemTag.HEAT_DAMAGED,
+    qualityMultiplier: 0.65,  // 35% quality penalty - heat damage
+    valueMultiplier: 0.35,    // 65% value penalty - structural compromise
+    description: 'Heat damage compromising material properties'
+  },
+
+  [ItemTag.CONTAMINATED]: {
+    tag: ItemTag.CONTAMINATED,
+    qualityMultiplier: 0.8,   // 20% quality penalty - contamination
+    valueMultiplier: 0.25,    // 75% value penalty - safety hazard
+    description: 'Chemical contamination requiring specialized treatment'
+  },
+
+  [ItemTag.FROZEN]: {
+    tag: ItemTag.FROZEN,
+    qualityMultiplier: 0.75,  // 25% quality penalty - cold damage
+    valueMultiplier: 0.6,     // 40% value penalty - brittleness
+    description: 'Cold damage causing material brittleness'
+  },
+
+  [ItemTag.RADIATION_EXPOSED]: {
+    tag: ItemTag.RADIATION_EXPOSED,
+    qualityMultiplier: 0.5,   // 50% quality penalty - radiation damage
+    valueMultiplier: 0.1,     // 90% value penalty - major safety hazard
+    description: 'Radioactive contamination posing serious health risks'
+  },
+
+  [ItemTag.IMPACT_DAMAGED]: {
+    tag: ItemTag.IMPACT_DAMAGED,
+    qualityMultiplier: 0.55,  // 45% quality penalty - structural damage
+    valueMultiplier: 0.3,     // 70% value penalty - potential failure
+    description: 'Physical trauma affecting structural integrity'
+  },
+
+  [ItemTag.WORN]: {
+    tag: ItemTag.WORN,
+    qualityMultiplier: 0.85,  // 15% quality penalty - general wear
+    valueMultiplier: 0.7,     // 30% value penalty - reduced performance
+    description: 'General wear and tear from extended use'
   }
 };
 
@@ -189,8 +303,8 @@ export function calculateTaggedQuality(baseQuality: number, tags: ItemTag[]): nu
     quality = Math.min(quality, qualityCap);
   }
   
-  // Ensure quality stays within valid range
-  return Math.max(0, Math.min(100, quality));
+  // Ensure quality stays within valid range and round to whole number
+  return Math.round(Math.max(0, Math.min(100, quality)));
 }
 
 export function calculateTaggedValue(baseValue: number, quality: number, tags: ItemTag[]): number {
@@ -218,7 +332,16 @@ export function getConditionTags(): ItemTag[] {
     ItemTag.RESTORED,
     ItemTag.FORGED,
     ItemTag.HAND_FORGED,
-    ItemTag.MILITARY_GRADE
+    ItemTag.MILITARY_GRADE,
+    // Environmental conditions
+    ItemTag.DRENCHED,
+    ItemTag.CORRODED,
+    ItemTag.HEAT_DAMAGED,
+    ItemTag.CONTAMINATED,
+    ItemTag.FROZEN,
+    ItemTag.RADIATION_EXPOSED,
+    ItemTag.IMPACT_DAMAGED,
+    ItemTag.WORN
   ];
 }
 

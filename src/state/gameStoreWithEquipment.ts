@@ -111,7 +111,7 @@ interface GameState {
   contractState: ContractState;
   
   // UI State
-  activeTab: 'research' | 'manufacturing' | 'equipment' | 'market' | 'contracts';
+  activeTab: 'research' | 'manufacturing' | 'catalog' | 'equipment' | 'market' | 'contracts';
   selectedFacilityId: string | null;
   
   // Notifications
@@ -161,7 +161,9 @@ interface GameState {
     productId: string,
     methodId: string,
     quantity: number,
-    rushOrder?: boolean
+    enhancementSelection?: import('../types').EnhancementSelection,
+    rushOrder?: boolean,
+    dynamicMethod?: MachineBasedMethod
   ) => void;
   cancelMachineJob: (facilityId: string, jobId: string) => boolean;
   
@@ -190,6 +192,7 @@ interface GameState {
   removeItemFromInventory: (facilityId: string, itemInstanceId: string, quantity?: number) => boolean;
   getAvailableItems: (facilityId: string, baseItemId: string) => number;
   findBestQualityItems: (facilityId: string, baseItemId: string, quantity: number) => ItemInstance[];
+  cleanupUndefinedItems: () => void;
 }
 
 // Helper to create initial equipment instances
@@ -283,7 +286,7 @@ export const useGameStore = create<GameState>((set, get) => ({
               const deliveredItem = createItemInstance({
                 baseItemId: order.materialId,
                 tags: [ItemTag.STANDARD], // Default to standard quality for market purchases
-                quality: 80 + Math.random() * 15, // 80-95% quality for market materials
+                quality: Math.round(80 + Math.random() * 15), // 80-95% quality for market materials (whole numbers)
                 quantity: order.quantity,
                 metadata: { 
                   source: 'market_delivery',
@@ -593,17 +596,27 @@ export const useGameStore = create<GameState>((set, get) => ({
   */
   
   // New machine workspace system
-  startMachineJob: (facilityId, productId, methodId, quantity = 1, rushOrder = false) => {
+  startMachineJob: (facilityId, productId, methodId, quantity = 1, enhancementSelection, rushOrder = false, dynamicMethod) => {
     const state = get();
     const facility = state.facilities.find(f => f.id === facilityId);
-    if (!facility) return;
-    
-    // Get the method from available products first (fail fast)
-    let method = basicSidearmMethods.find(m => m.id === methodId);
-    if (!method) {
-      method = tacticalKnifeMethods.find(m => m.id === methodId);
+    if (!facility) {
+      console.error(`Cannot start job: facility ${facilityId} not found`);
+      return;
     }
-    if (!method) return;
+    
+    // Get the method - check dynamic method first, then predefined methods
+    let method = dynamicMethod;
+    if (!method) {
+      method = basicSidearmMethods.find(m => m.id === methodId);
+      if (!method) {
+        method = tacticalKnifeMethods.find(m => m.id === methodId);
+      }
+    }
+    
+    if (!method) {
+      console.error(`Cannot start job: method ${methodId} not found`);
+      return;
+    }
     
     // Ensure workspace is ready - but don't wait for state update
     let workspace = state.machineWorkspace;
@@ -624,7 +637,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       method,
       quantity,
       priority,
-      rushOrder
+      rushOrder,
+      enhancementSelection
     );
     
     // Single state update with the current workspace
@@ -1153,6 +1167,41 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     
     return inventoryManager.getBestQualityItems(facility.inventory, baseItemId, quantity);
+  },
+  
+  // Clean up all inventories by removing undefined items
+  cleanupUndefinedItems: () => {
+    set(state => {
+      console.log('🧹 Starting global cleanup of undefined items...');
+      let totalRemovedCount = 0;
+      const allRemovedItems = new Set<string>();
+      
+      const updatedFacilities = state.facilities.map(facility => {
+        const updatedFacility = { ...facility };
+        
+        // Clean up new inventory system
+        if (updatedFacility.inventory) {
+          const result = inventoryManager.cleanInventoryUndefinedItems(updatedFacility.inventory);
+          totalRemovedCount += result.removedCount;
+          result.removedItems.forEach(item => allRemovedItems.add(item));
+        }
+        
+        // Clean up legacy storage
+        const legacyResult = inventoryManager.cleanLegacyStorageUndefinedItems(updatedFacility.current_storage);
+        totalRemovedCount += legacyResult.removedCount;
+        legacyResult.removedItems.forEach(item => allRemovedItems.add(item));
+        
+        return updatedFacility;
+      });
+      
+      console.log(`🧹 Global cleanup complete: removed ${totalRemovedCount} undefined items`);
+      console.log(`🧹 Undefined item types removed: ${Array.from(allRemovedItems).join(', ')}`);
+      
+      return {
+        ...state,
+        facilities: updatedFacilities
+      };
+    });
   }
 }));
 
@@ -1170,24 +1219,52 @@ initialFacility.used_floor_space = initialFacility.equipment.reduce((sum, eq) =>
   return sum + (def?.footprint || 0);
 }, 0);
 
-// Get the initial materials from the store definition
+// Get the initial materials from the store definition  
 const initialMaterials = {
-  // For Forge method (steel + plastic) - 3 jobs worth
+  // Raw materials for manufacturing
   steel: 20,
   plastic: 15,
+  aluminum: 2,
   
-  // For Restore method (damaged weapons + spares) - 3 jobs worth  
+  // Components for assembly/repair (based on baseItem definitions)
+  'mechanical-component': 30, // For creating mechanical-assembly (10x needed per assembly)
+  'small-tube': 5, // Direct component for basic_sidearm  
+  'small-casing': 5, // Direct component for basic_sidearm
+  'mechanical-assembly': 3, // Pre-made assemblies for repairs
+  
+  // Repair and restoration materials
   damaged_basic_sidearm: 3,
-  low_tech_spares: 20,
+  low_tech_spares: 20, // Fallback repair materials
   
   // For tactical knife methods
   damaged_tactical_knife: 2,
   dull_tactical_knife: 4,
+  'blade-finished': 3, // For knife assembly
+  'knife-handle': 5, // For knife assembly
   
   // Additional useful materials
-  aluminum: 2,
   basic_electronics: 3,
-  machined_parts: 5
+  machined_parts: 5,
+  cleaning_supplies: 10, // For treatment workflows
+  
+  // Environmental condition test items for treatment system testing
+  drenched_tactical_knife: 2,
+  corroded_mechanical_assembly: 3,
+  heat_damaged_sidearm: 2,
+  contaminated_electronics: 4,
+  radiation_exposed_rifle: 1,
+  impact_damaged_components: 5,
+  
+  // Treatment materials for environmental condition handling
+  absorbent_materials: 10,
+  rust_remover: 8,
+  decontamination_solution: 6,
+  neutralizing_agent: 5,
+  thermal_protection: 4,
+  tempering_compounds: 3,
+  protective_coating: 6,
+  lubricants: 8,
+  replacement_parts: 12
 };
 
 // Sync facility storage with game store materials
@@ -1198,6 +1275,13 @@ initialFacility.inventory = facilityMigrationManager.migrateFacility({
   ...initialFacility,
   current_storage: initialMaterials
 }).inventory;
+
+// Ensure adequate storage capacity for manufacturing operations
+if (initialFacility.inventory && initialFacility.inventory.storageCapacity < 1000) {
+  console.log(`Upgrading facility storage capacity from ${initialFacility.inventory.storageCapacity} to 1000`);
+  initialFacility.inventory.storageCapacity = 1000;
+  initialFacility.storage_capacity = 1000; // Keep both properties in sync
+}
 
 // Initialize the machine workspace for the facility
 const machineManager = new MachineWorkspaceManager(equipmentDatabase);
@@ -1248,6 +1332,43 @@ useGameStore.setState({
     nextRefreshAt: 48 // Next refresh in 48 hours
   }
 });
+
+// Clean up any undefined items from inventories on startup
+setTimeout(() => {
+  console.log('🧹 Running startup cleanup of undefined items...');
+  useGameStore.getState().cleanupUndefinedItems();
+}, 100); // Small delay to ensure everything is initialized
+
+// Add global cleanup function for manual use (callable from console)
+if (typeof window !== 'undefined') {
+  (window as any).cleanupInventory = () => {
+    console.log('🧹 Manual inventory cleanup requested...');
+    useGameStore.getState().cleanupUndefinedItems();
+  };
+  
+  // Add global validation function for material references
+  (window as any).validateMaterials = () => {
+    import('../data/baseItems').then(({ validateAssemblyComponents, getBaseItem, baseItems }) => {
+      console.log('🔍 Validating all material references...');
+      
+      // Validate all baseItem assembly components
+      let totalMissingComponents = 0;
+      for (const [itemId, baseItem] of Object.entries(baseItems)) {
+        const result = validateAssemblyComponents(baseItem);
+        if (!result.valid) {
+          console.error(`❌ ${itemId} has missing components: ${result.missingComponents.join(', ')}`);
+          totalMissingComponents += result.missingComponents.length;
+        }
+      }
+      
+      if (totalMissingComponents === 0) {
+        console.log('✅ All assembly components are properly defined!');
+      } else {
+        console.log(`❌ Found ${totalMissingComponents} missing component references`);
+      }
+    });
+  };
+}
 
 // Set up job completion callback on the store's machine workspace manager
 useGameStore.getState().machineWorkspaceManager.setJobCompleteCallback((job) => {

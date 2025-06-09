@@ -107,6 +107,22 @@ export interface MachineBasedMethod {
 }
 
 
+// Sub-operation within a parent job
+export interface JobSubOperation {
+  id: string;
+  operationIndex: number; // Index in the parent job's operations array
+  operation: MachineOperation; // The operation definition
+  state: 'pending' | 'queued' | 'in_progress' | 'completed' | 'failed';
+  assignedMachineId?: string; // Which machine is processing this sub-operation
+  startedAt?: number;
+  completedAt?: number;
+  progress?: {
+    startTime: number;
+    estimatedCompletion: number;
+    lastUpdateTime?: number;
+  };
+}
+
 // Enhanced production job for machine slots (CURRENT SYSTEM)
 export interface MachineSlotJob {
   id: string;
@@ -126,7 +142,7 @@ export interface MachineSlotJob {
   
   // Machine workspace specific
   state: 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
-  currentMachineId?: string; // Which machine is processing this
+  currentMachineId?: string; // Which machine is processing this (for simple jobs)
   currentOperationIndex: number; // Which operation we're on
   completedOperations: string[]; // IDs of completed operations
   
@@ -137,6 +153,17 @@ export interface MachineSlotJob {
   // Material tracking (for legacy compatibility)
   consumedMaterials?: Map<string, number>;
   finalQuality?: number;
+  
+  // Sub-operations system (all jobs now use this)
+  subOperations?: Map<number, JobSubOperation>; // Operation index -> sub-operation
+  
+  // PHASE 2: Enhancement system
+  enhancementSelection?: import('./enhancement').EnhancementSelection;
+  
+  // DEPRECATED: Parallel operation support (replaced by sub-operations)
+  isParallelOperation?: boolean; // True if this job is a parallel sub-operation
+  parentJobId?: string; // ID of parent job if this is a parallel operation
+  originalOperationIndex?: number; // Which operation index this was in the parent job
 }
 
 // LEGACY - Comment out after migration

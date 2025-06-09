@@ -17,6 +17,85 @@ import { createItemInstance, calculateMarketValue, combineCompatibleItems } from
 
 export class InventoryManager {
   
+  // Clean up inventory by removing items not defined in baseItems
+  cleanInventoryUndefinedItems(inventory: FacilityInventory): { removedCount: number; removedItems: string[] } {
+    let removedCount = 0;
+    const removedItems: string[] = [];
+    
+    console.log('🧹 Cleaning inventory: removing undefined items...');
+    
+    for (const [category, group] of inventory.groups) {
+      const validSlots: InventorySlot[] = [];
+      
+      for (const slot of group.slots) {
+        const validInstances = slot.stack.instances.filter(instance => {
+          const baseItem = getBaseItem(instance.baseItemId);
+          if (!baseItem) {
+            console.log(`❌ Removing undefined item: ${instance.baseItemId} (${instance.quantity}x)`);
+            removedCount += instance.quantity;
+            if (!removedItems.includes(instance.baseItemId)) {
+              removedItems.push(instance.baseItemId);
+            }
+            return false;
+          }
+          return true;
+        });
+        
+        if (validInstances.length > 0) {
+          slot.stack.instances = validInstances;
+          slot.stack.totalQuantity = validInstances.reduce((sum, inst) => sum + inst.quantity, 0);
+          validSlots.push(slot);
+        }
+      }
+      
+      group.slots = validSlots;
+      group.totalItems = validSlots.reduce((sum, slot) => sum + slot.stack.totalQuantity, 0);
+      group.totalValue = validSlots.reduce((sum, slot) => {
+        return sum + slot.stack.instances.reduce((instSum, inst) => {
+          const baseItem = getBaseItem(inst.baseItemId);
+          return instSum + (baseItem ? baseItem.baseValue * inst.quantity : 0);
+        }, 0);
+      }, 0);
+    }
+    
+    // Recalculate totals
+    inventory.totalItems = Array.from(inventory.groups.values()).reduce((sum, group) => sum + group.totalItems, 0);
+    inventory.totalValue = Array.from(inventory.groups.values()).reduce((sum, group) => sum + group.totalValue, 0);
+    inventory.usedCapacity = inventory.totalItems; // Simplified: 1 item = 1 capacity unit
+    
+    console.log(`🧹 Inventory cleanup complete: removed ${removedCount} undefined items`);
+    if (removedItems.length > 0) {
+      console.log(`🧹 Removed item types: ${removedItems.join(', ')}`);
+    }
+    
+    return { removedCount, removedItems };
+  }
+  
+  // Clean up legacy storage by removing items not defined in baseItems
+  cleanLegacyStorageUndefinedItems(storage: Record<string, number>): { removedCount: number; removedItems: string[] } {
+    let removedCount = 0;
+    const removedItems: string[] = [];
+    
+    console.log('🧹 Cleaning legacy storage: removing undefined items...');
+    
+    for (const [itemId, quantity] of Object.entries(storage)) {
+      const baseItem = getBaseItem(itemId);
+      if (!baseItem) {
+        console.log(`❌ Removing undefined item from legacy storage: ${itemId} (${quantity}x)`);
+        removedCount += quantity;
+        removedItems.push(itemId);
+        delete storage[itemId];
+      }
+    }
+    
+    console.log(`🧹 Legacy storage cleanup complete: removed ${removedCount} undefined items`);
+    if (removedItems.length > 0) {
+      console.log(`🧹 Removed item types: ${removedItems.join(', ')}`);
+    }
+    
+    return { removedCount, removedItems };
+  }
+  
   // Create empty inventory
   createEmptyInventory(storageCapacity: number = 1000): FacilityInventory {
     const groups = new Map<ItemCategory, InventoryGroup>();
@@ -43,23 +122,38 @@ export class InventoryManager {
   
   // Add item to inventory
   addItem(inventory: FacilityInventory, item: ItemInstance): boolean {
-    const baseItem = getBaseItem(item.baseItemId);
-    if (!baseItem) {
-      console.error(`Invalid base item ID: ${item.baseItemId}`);
-      return false;
-    }
-    
-    // Check capacity
-    if (inventory.usedCapacity + item.quantity > inventory.storageCapacity) {
-      console.warn('Insufficient storage capacity');
-      return false;
-    }
-    
-    const group = inventory.groups.get(baseItem.category);
-    if (!group) {
-      console.error(`No group found for category: ${baseItem.category}`);
-      return false;
-    }
+    try {
+      const baseItem = getBaseItem(item.baseItemId);
+      if (!baseItem) {
+        console.error(`Invalid base item ID: ${item.baseItemId}`);
+        return false;
+      }
+      
+      // Check capacity
+      if (inventory.usedCapacity + item.quantity > inventory.storageCapacity) {
+        console.warn(`⚠️ INSUFFICIENT STORAGE: Cannot add ${item.quantity}x ${item.baseItemId}. Used: ${inventory.usedCapacity}/${inventory.storageCapacity}, would become: ${inventory.usedCapacity + item.quantity}/${inventory.storageCapacity}`);
+        return false;
+      }
+      
+      const group = inventory.groups.get(baseItem.category);
+      if (!group) {
+        console.error(`No group found for category: ${baseItem.category}`);
+        return false;
+      }
+      
+      // Validate item properties
+      if (typeof item.quality !== 'number' || isNaN(item.quality)) {
+        console.error(`Invalid quality value: ${item.quality} (type: ${typeof item.quality})`);
+        return false;
+      }
+      if (typeof item.quantity !== 'number' || isNaN(item.quantity) || item.quantity <= 0) {
+        console.error(`Invalid quantity value: ${item.quantity} (type: ${typeof item.quantity})`);
+        return false;
+      }
+      if (!Array.isArray(item.tags)) {
+        console.error(`Invalid tags value: ${item.tags} (type: ${typeof item.tags})`);
+        return false;
+      }
     
     // Find existing slot for this base item
     let slot = group.slots.find(s => s.baseItemId === item.baseItemId);
@@ -96,6 +190,10 @@ export class InventoryManager {
     
     inventory.lastUpdated = Date.now();
     return true;
+    } catch (error) {
+      console.error(`ERROR: Failed to add ${item.baseItemId} to inventory:`, error);
+      return false;
+    }
   }
   
   // Remove item from inventory
@@ -358,6 +456,19 @@ export class InventoryManager {
       capacity: inventory.storageCapacity,
       percentage: Math.round((inventory.usedCapacity / inventory.storageCapacity) * 100)
     };
+  }
+
+  // Get all items in inventory as a flat array
+  getAllItems(inventory: FacilityInventory): ItemInstance[] {
+    const allItems: ItemInstance[] = [];
+    
+    for (const group of inventory.groups.values()) {
+      for (const slot of group.slots) {
+        allItems.push(...slot.stack.instances);
+      }
+    }
+    
+    return allItems;
   }
   
   // Optimize storage by combining compatible items

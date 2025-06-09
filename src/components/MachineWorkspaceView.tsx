@@ -1,14 +1,47 @@
 // Machine Workspace View - Shows machines with job slots
 
 import { useGameStore } from '../state/gameStoreWithEquipment';
-import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility, ItemTag } from '../types';
+import { MachineSlot, MachineSlotJob, MachineWorkspace, Facility, ItemTag, ItemManufacturingType } from '../types';
 import { Equipment, EquipmentInstance } from '../types';
 import { formatGameTime } from '../utils/gameClock';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { basicSidearmMethods, tacticalKnifeMethods } from '../data/manufacturingMethods';
 import { inventoryManager } from '../utils/inventoryManager';
 import { getDisplayName, getQualityDescription } from '../utils/itemSystem';
-import { baseItems } from '../data/baseItems';
+import { baseItems, getBaseItem } from '../data/baseItems';
+import { globalJobStateManager, JobReadinessState } from '../systems/jobStateManager';
+
+// Job State Debug Panel Component
+function JobStateDebugPanel() {
+  const stats = globalJobStateManager.getStats();
+  
+  return (
+    <div className="terminal-card border-blue-600 mb-4">
+      <div className="text-blue-400 font-mono text-sm mb-2">🔍 JOB STATE MANAGER</div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-xs">
+        <div className="text-center">
+          <div className="text-green-400 text-lg font-bold">{stats.ready}</div>
+          <div className="text-gray-400">READY</div>
+        </div>
+        <div className="text-center">
+          <div className="text-yellow-400 text-lg font-bold">{stats.active}</div>
+          <div className="text-gray-400">ACTIVE</div>
+        </div>
+        <div className="text-center">
+          <div className="text-orange-400 text-lg font-bold">{stats.blocked}</div>
+          <div className="text-gray-400">BLOCKED</div>
+        </div>
+        <div className="text-center">
+          <div className="text-emerald-400 text-lg font-bold">{stats.completed}</div>
+          <div className="text-gray-400">COMPLETED</div>
+        </div>
+        <div className="text-center">
+          <div className="text-teal-400 text-lg font-bold">{stats.total}</div>
+          <div className="text-gray-400">TOTAL</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Helper function to format product names for display
 function formatProductName(productId: string): string {
@@ -17,6 +50,7 @@ function formatProductName(productId: string): string {
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
+
 
 interface MachineCardProps {
   equipment: EquipmentInstance;
@@ -346,10 +380,12 @@ function OperationFlowDisplay({ job }: { job: MachineSlotJob }) {
 
 interface UnifiedJobListProps {
   workspace: MachineWorkspace;
+  facility: Facility;
+  equipmentDatabase: Map<string, Equipment>;
   allJobs: MachineSlotJob[]; // LEGACY: Not used in current implementation, jobs come from workspace
 }
 
-function UnifiedJobList({ workspace }: UnifiedJobListProps) {
+function UnifiedJobList({ workspace, facility, equipmentDatabase }: UnifiedJobListProps) {
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
   const cancelMachineJob = useGameStore(state => state.cancelMachineJob);
@@ -377,12 +413,17 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
     };
   };
   
-  // Collect all jobs: active (from machines), queued, and recently completed
+  // Collect all jobs: active (from machines), ready/blocked (from job state manager), and recently completed
   const activeJobs = Array.from(workspace.machines.values())
     .map(slot => slot.currentJob)
     .filter((job): job is MachineSlotJob => job !== null && job !== undefined);
   
-  const queuedJobs = workspace.jobQueue || [];
+  // Get jobs from the new event-driven job state manager
+  const readyJobs = globalJobStateManager.getReadyJobs();
+  const blockedJobs = globalJobStateManager.getBlockedJobs();
+  const inProgressJobs = globalJobStateManager.getJobsByState(JobReadinessState.IN_PROGRESS);
+  
+  const queuedJobs = [...readyJobs, ...blockedJobs, ...inProgressJobs];
   
   // Filter completed jobs that are less than 5 seconds old (using game time)
   const currentGameTime = gameTime.totalGameHours;
@@ -399,14 +440,66 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
   const combinedJobs = [...activeJobs, ...queuedJobs, ...recentCompletedJobs]
     .filter((job): job is MachineSlotJob => job !== null && job !== undefined);
   
-  // No need for complex timer logic - just use the filtered list
+  // MANUFACTURING V2: Filter to show only parent jobs, not sub-operations
   const visibleJobs = combinedJobs.filter(job => {
     // Double-check job is defined
     if (!job || !job.id) {
       return false;
     }
+    // Hide sub-operations (they have _subop_ in their ID)
+    if (job.id.includes('_subop_')) {
+      return false;
+    }
     return true;
   });
+  
+  // Helper to get sub-operation progress for all jobs
+  const getSubOperationProgress = (job: MachineSlotJob) => {
+    // Always try to use the enhanced display - create basic progress info even for legacy jobs
+    if (!job.subOperations || job.subOperations.size === 0) {
+      // Create a synthetic sub-operation view for legacy jobs
+      return {
+        completed: job.completedOperations?.length || 0,
+        inProgress: job.state === 'in_progress' ? 1 : 0,
+        queued: job.state === 'queued' ? 1 : 0,
+        pending: Math.max(0, (job.method.operations.length || 0) - (job.completedOperations?.length || 0) - (job.state === 'in_progress' ? 1 : 0)),
+        total: job.method.operations.length || 1,
+        percentage: Math.round(((job.completedOperations?.length || 0) / (job.method.operations.length || 1)) * 100),
+        operationGroups: new Map(),
+        isLegacy: true
+      };
+    }
+    
+    const subOps = Array.from(job.subOperations.values());
+    const completed = subOps.filter(sub => sub.state === 'completed').length;
+    const inProgress = subOps.filter(sub => sub.state === 'in_progress').length;
+    const queued = subOps.filter(sub => sub.state === 'queued').length;
+    const pending = subOps.filter(sub => sub.state === 'pending').length;
+    
+    // Group by operation type for better display
+    const operationGroups = new Map<string, Array<{subOp: any, status: string}>>();
+    
+    subOps.forEach(subOp => {
+      const opName = subOp.operation.name.replace(' (1x)', ''); // Remove (1x) suffix for grouping
+      if (!operationGroups.has(opName)) {
+        operationGroups.set(opName, []);
+      }
+      operationGroups.get(opName)!.push({
+        subOp,
+        status: subOp.state
+      });
+    });
+    
+    return {
+      total: subOps.length,
+      completed,
+      inProgress,
+      queued,
+      pending,
+      percentage: Math.round((completed / subOps.length) * 100),
+      operationGroups
+    };
+  };
   
   const handleCancelJob = (jobId: string, facilityId: string) => {
     cancelMachineJob(facilityId, jobId);
@@ -426,6 +519,57 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
   };
   
   const getJobStatusInfo = (job: MachineSlotJob) => {
+    // Get the enhanced state from job state manager
+    const jobState = globalJobStateManager.getJobState(job.id);
+    
+    if (jobState) {
+      switch (jobState.state) {
+        case JobReadinessState.READY_TO_START:
+          return {
+            statusText: 'READY',
+            statusColor: 'text-green-400',
+            borderColor: 'border-green-600',
+            bgColor: 'bg-green-900'
+          };
+        case JobReadinessState.BLOCKED_BY_DEPENDENCIES:
+          return {
+            statusText: 'BLOCKED (DEPS)',
+            statusColor: 'text-orange-400',
+            borderColor: 'border-orange-600',
+            bgColor: 'bg-orange-900'
+          };
+        case JobReadinessState.BLOCKED_BY_MATERIALS:
+          return {
+            statusText: 'BLOCKED (MATERIALS)',
+            statusColor: 'text-red-400',
+            borderColor: 'border-red-600',
+            bgColor: 'bg-red-900'
+          };
+        case JobReadinessState.BLOCKED_BY_EQUIPMENT:
+          return {
+            statusText: 'BLOCKED (EQUIPMENT)',
+            statusColor: 'text-purple-400',
+            borderColor: 'border-purple-600',
+            bgColor: 'bg-purple-900'
+          };
+        case JobReadinessState.IN_PROGRESS:
+          return {
+            statusText: 'IN PROGRESS',
+            statusColor: 'text-yellow-400',
+            borderColor: 'border-yellow-600',
+            bgColor: 'bg-yellow-900'
+          };
+        case JobReadinessState.COMPLETED:
+          return {
+            statusText: 'COMPLETED',
+            statusColor: 'text-emerald-400',
+            borderColor: 'border-emerald-600',
+            bgColor: 'bg-emerald-900'
+          };
+      }
+    }
+    
+    // Fallback to legacy states
     switch (job.state) {
       case 'queued':
         return {
@@ -505,21 +649,92 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
                         )}
                       </div>
                       
-                      {job.state === 'queued' && (
-                        <div className="text-xs text-gray-400 mt-1">
-                          Next: {job.method.operations[job.currentOperationIndex]?.name}
-                        </div>
-                      )}
-                      
-                      {job.state === 'in_progress' && (() => {
-                        const progress = getJobProgress(job);
-                        return progress ? (
-                          <div className="text-xs text-yellow-300 mt-1">
-                            Current: {progress.currentOperation} ({progress.percentage}%)
-                          </div>
-                        ) : (
-                          <div className="text-xs text-yellow-300 mt-1">
-                            Current: {job.method.operations[job.currentOperationIndex]?.name || 'Processing...'}
+                      {/* Enhanced status display for all jobs */}
+                      {(() => {
+                        const v2Progress = getSubOperationProgress(job);
+                        
+                        return (
+                          <div className="text-xs mt-1 space-y-1">
+                            <div className="text-teal-300">
+                              Progress: {v2Progress.completed}/{v2Progress.total} operations ({v2Progress.percentage}%)
+                            </div>
+                            
+                            {/* Show current active operation */}
+                            {(() => {
+                              // For real v2 jobs with sub-operations
+                              if (job.subOperations && job.subOperations.size > 0) {
+                                const activeOp = Array.from(job.subOperations.entries())
+                                  .find(([_, subOp]) => subOp.state === 'in_progress');
+                                
+                                if (activeOp) {
+                                  const [index, subOp] = activeOp;
+                                  const equipment = facility?.equipment.find(e => e.id === subOp.assignedMachineId);
+                                  const equipmentDef = equipment ? equipmentDatabase.get(equipment.equipmentId) : null;
+                                  
+                                  return (
+                                    <div className="text-yellow-300">
+                                      ◐ Current: {subOp.operation.name} 
+                                      {equipmentDef && (
+                                        <span className="text-teal-400"> ({equipmentDef.name})</span>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                
+                                const queuedOp = Array.from(job.subOperations.entries())
+                                  .find(([_, subOp]) => subOp.state === 'queued');
+                                
+                                if (queuedOp) {
+                                  const [index, subOp] = queuedOp;
+                                  return (
+                                    <div className="text-blue-300">
+                                      ● Next: {subOp.operation.name}
+                                    </div>
+                                  );
+                                }
+                                
+                                const pendingOp = Array.from(job.subOperations.entries())
+                                  .find(([_, subOp]) => subOp.state === 'pending');
+                                
+                                if (pendingOp) {
+                                  const [index, subOp] = pendingOp;
+                                  return (
+                                    <div className="text-gray-400">
+                                      ○ Waiting: {subOp.operation.name}
+                                    </div>
+                                  );
+                                }
+                              } else {
+                                // For legacy jobs, show current operation based on job state
+                                if (job.state === 'queued') {
+                                  return (
+                                    <div className="text-blue-300">
+                                      ● Next: {job.method.operations[job.currentOperationIndex]?.name || 'Starting...'}
+                                    </div>
+                                  );
+                                } else if (job.state === 'in_progress') {
+                                  return (
+                                    <div className="text-yellow-300">
+                                      ◐ Current: {job.method.operations[job.currentOperationIndex]?.name || 'Processing...'}
+                                    </div>
+                                  );
+                                }
+                              }
+                              
+                              return null;
+                            })()}
+                            
+                            {/* Summary counts for jobs with multiple operations */}
+                            {v2Progress.inProgress > 1 && (
+                              <div className="text-yellow-400">
+                                +{v2Progress.inProgress - 1} more active
+                              </div>
+                            )}
+                            {v2Progress.queued > 1 && (
+                              <div className="text-blue-400">
+                                {v2Progress.queued} ready to start
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -569,41 +784,227 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
                   {/* Expanded job details */}
                   {isExpanded && (
                     <div className="mt-2 ml-4 space-y-2">
-                      {/* Operation progress */}
-                      <div className="flex flex-wrap gap-1 text-xs">
-                        {job.method.operations.map((op, idx) => {
-                          const isComplete = job.completedOperations.includes(op.id);
-                          const isCurrent = idx === job.currentOperationIndex;
-                          const isPending = idx > job.currentOperationIndex;
-                          
-                          let statusClass = 'text-gray-600';
-                          let statusSymbol = '○';
-                          
-                          if (isComplete) {
-                            statusClass = 'text-green-400';
-                            statusSymbol = '✓';
-                          } else if (isCurrent) {
-                            statusClass = 'text-yellow-400';
-                            statusSymbol = '◐';
-                          } else if (isPending) {
-                            statusClass = 'text-gray-500';
-                            statusSymbol = '○';
-                          }
-                          
-                          return (
-                            <div key={op.id} className={`${statusClass} flex items-center`}>
-                              <span>{statusSymbol}</span>
-                              <span className="ml-1">{op.name}</span>
+                      {(() => {
+                        const v2Progress = getSubOperationProgress(job);
+                        
+                        // Always use the enhanced detailed display for all jobs
+                        return (
+                          <div className="space-y-4">
+                            {/* Expected Outputs */}
+                            <div className="bg-gray-800 p-2 border border-gray-600">
+                              <div className="text-teal-400 text-xs font-semibold mb-1">
+                                🎯 Expected Outcomes
+                              </div>
+                              <div className="ml-2 space-y-1">
+                                {(() => {
+                                  // Show only FINAL outputs from the last operation that produces something
+                                  const outputs = new Set<string>();
+                                  if (job.method?.operations) {
+                                    // Find the last operation that produces materials (this is the final output)
+                                    const operations = job.method.operations;
+                                    for (let i = operations.length - 1; i >= 0; i--) {
+                                      const op = operations[i];
+                                      if (op.materialProduction && op.materialProduction.length > 0) {
+                                        op.materialProduction.forEach(prod => {
+                                          const baseItem = getBaseItem(prod.itemId);
+                                          if (baseItem) {
+                                            outputs.add(`${prod.count}x ${baseItem.name}`);
+                                          }
+                                        });
+                                        break; // Only show the final production step
+                                      }
+                                    }
+                                  }
+                                  
+                                  if (outputs.size === 0) {
+                                    // Fallback to product name
+                                    outputs.add(`1x ${formatProductName(job.productId)}`);
+                                  }
+                                  
+                                  return Array.from(outputs).map((output, idx) => (
+                                    <div key={idx} className="text-xs text-teal-300">
+                                      • {output}
+                                    </div>
+                                  ));
+                                })()}
+                              </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                      
-                      {/* Job Inventory Display */}
-                      {job.state === 'in_progress' && <JobInventoryDisplay job={job} />}
-                      
-                      {/* Operation Flow Display */}
-                      {job.state === 'in_progress' && <OperationFlowDisplay job={job} />}
+                            
+                            {/* Individual Sub-Operations with Details */}
+                            <div className="space-y-2">
+                              {job.subOperations && job.subOperations.size > 0 ? (
+                                // Real v2 jobs with sub-operations
+                                Array.from(job.subOperations.entries()).map(([index, subOp]) => {
+                                  const statusIcon = {
+                                    'completed': '✓',
+                                    'in_progress': '◐',
+                                    'queued': '●',
+                                    'pending': '○',
+                                    'failed': '✗'
+                                  }[subOp.state] || '○';
+                                  
+                                  const statusColor = {
+                                    'completed': 'text-green-400',
+                                    'in_progress': 'text-yellow-400',
+                                    'queued': 'text-blue-400',
+                                    'pending': 'text-gray-400',
+                                    'failed': 'text-red-400'
+                                  }[subOp.state] || 'text-gray-400';
+                                  
+                                  const bgColor = {
+                                    'completed': 'bg-green-900',
+                                    'in_progress': 'bg-yellow-900',
+                                    'queued': 'bg-blue-900',
+                                    'pending': 'bg-gray-900',
+                                    'failed': 'bg-red-900'
+                                  }[subOp.state] || 'bg-gray-900';
+                                  
+                                  return (
+                                    <div key={index} className={`border-l-2 border-gray-600 pl-2 py-1 ${bgColor} bg-opacity-20`}>
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`${statusColor} font-mono text-xs`}>{statusIcon}</span>
+                                          <span className="text-xs text-white font-medium">
+                                            {index + 1}. {subOp.operation.name}
+                                          </span>
+                                          <span className={`text-xs ${statusColor} uppercase font-bold`}>
+                                            {subOp.state}
+                                          </span>
+                                        </div>
+                                        <div className="text-xs text-gray-400">
+                                          ~{subOp.operation.baseDurationMinutes || 0}min
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Operation Details */}
+                                      <div className="ml-4 mt-1 space-y-1">
+                                        {/* Machine Assignment */}
+                                        {subOp.assignedMachineId && (
+                                          <div className="text-xs text-teal-300">
+                                            🔧 Machine: {(() => {
+                                              const equipment = facility?.equipment.find(e => e.id === subOp.assignedMachineId);
+                                              const equipmentDef = equipment ? equipmentDatabase.get(equipment.equipmentId) : null;
+                                              return equipmentDef?.name || subOp.assignedMachineId;
+                                            })()}
+                                          </div>
+                                        )}
+                                        
+                                        {/* Required Capabilities */}
+                                        {subOp.operation.requiredTag && (
+                                          <div className="text-xs text-purple-300">
+                                            📋 Requires: {subOp.operation.requiredTag.category} ≥ {subOp.operation.requiredTag.minimum}
+                                          </div>
+                                        )}
+                                        
+                                        {/* Material Consumption */}
+                                        {subOp.operation.materialConsumption && subOp.operation.materialConsumption.length > 0 && (
+                                          <div className="text-xs text-red-300">
+                                            📥 Consumes: {subOp.operation.materialConsumption.map(mat => {
+                                              const baseItem = getBaseItem(mat.itemId);
+                                              return `${mat.count}x ${baseItem?.name || mat.itemId}`;
+                                            }).join(', ')}
+                                          </div>
+                                        )}
+                                        
+                                        {/* Material Production */}
+                                        {subOp.operation.materialProduction && subOp.operation.materialProduction.length > 0 && (
+                                          <div className="text-xs text-green-300">
+                                            📤 Produces: {subOp.operation.materialProduction.map(mat => {
+                                              const baseItem = getBaseItem(mat.itemId);
+                                              return `${mat.count}x ${baseItem?.name || mat.itemId}`;
+                                            }).join(', ')}
+                                          </div>
+                                        )}
+                                        
+                                        {/* Progress for in-progress operations */}
+                                        {subOp.state === 'in_progress' && subOp.startedAt && (
+                                          <div className="text-xs text-yellow-300">
+                                            ⏱️ Started: {formatGameTime({
+                                              totalGameHours: subOp.startedAt,
+                                              days: Math.floor(subOp.startedAt / 24),
+                                              hours: subOp.startedAt % 24,
+                                              isPaused: false,
+                                              gameSpeed: 1
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                // Legacy jobs - show operations from method
+                                job.method.operations.map((op, index) => {
+                                  const isCompleted = index < (job.completedOperations?.length || 0);
+                                  const isCurrent = index === job.currentOperationIndex && job.state === 'in_progress';
+                                  const isPending = index > job.currentOperationIndex;
+                                  
+                                  const statusIcon = isCompleted ? '✓' : isCurrent ? '◐' : isPending ? '○' : '●';
+                                  const statusColor = isCompleted ? 'text-green-400' : isCurrent ? 'text-yellow-400' : isPending ? 'text-gray-400' : 'text-blue-400';
+                                  const bgColor = isCompleted ? 'bg-green-900' : isCurrent ? 'bg-yellow-900' : isPending ? 'bg-gray-900' : 'bg-blue-900';
+                                  const status = isCompleted ? 'COMPLETED' : isCurrent ? 'IN PROGRESS' : isPending ? 'PENDING' : 'QUEUED';
+                                  
+                                  return (
+                                    <div key={index} className={`border-l-2 border-gray-600 pl-2 py-1 ${bgColor} bg-opacity-20`}>
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`${statusColor} font-mono text-xs`}>{statusIcon}</span>
+                                          <span className="text-xs text-white font-medium">
+                                            {index + 1}. {op.name}
+                                          </span>
+                                          <span className={`text-xs ${statusColor} uppercase font-bold`}>
+                                            {status}
+                                          </span>
+                                        </div>
+                                        <div className="text-xs text-gray-400">
+                                          ~{op.baseDurationMinutes || 0}min
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Legacy operation details */}
+                                      <div className="ml-4 mt-1 space-y-1">
+                                        {op.material_requirements && op.material_requirements.length > 0 && (
+                                          <div className="text-xs text-red-300">
+                                            📥 Requires: {op.material_requirements.map(mat => 
+                                              `${mat.quantity}x ${mat.material_id}`
+                                            ).join(', ')}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                            
+                            {/* Job Inventory Status */}
+                            {job.jobInventory && (
+                              <div className="bg-gray-800 p-2 border border-gray-600">
+                                <div className="text-orange-400 text-xs font-semibold mb-1">
+                                  📦 Job Inventory
+                                </div>
+                                <div className="ml-2 space-y-1">
+                                  {(() => {
+                                    const allItems = inventoryManager.getAllItems(job.jobInventory);
+                                    if (allItems.length === 0) {
+                                      return <div className="text-xs text-gray-500">Empty</div>;
+                                    }
+                                    
+                                    return allItems.map((item, idx) => {
+                                      const baseItem = getBaseItem(item.baseItemId);
+                                      return (
+                                        <div key={idx} className="text-xs text-orange-300">
+                                          • {item.quantity}x {baseItem?.name || item.baseItemId} ({item.quality}% quality)
+                                        </div>
+                                      );
+                                    });
+                                  })()}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -616,312 +1017,6 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
   );
 }
 
-interface ProductionInterfaceProps {
-  facility: Facility;
-}
-
-function ProductionInterface({ facility }: ProductionInterfaceProps) {
-  const [selectedProduct, setSelectedProduct] = useState<string>('');
-  const [showMethodDetails, setShowMethodDetails] = useState<string | null>(null);
-  const [startingJob, setStartingJob] = useState<string | null>(null);
-  const startMachineJob = useGameStore(state => state.startMachineJob);
-  
-  const handleStartJob = (facilityId: string, productId: string, methodId: string, quantity: number) => {
-    // Show immediate feedback for just this method
-    setStartingJob(methodId);
-    startMachineJob(facilityId, productId, methodId, quantity);
-    // Clear the feedback after a short delay
-    setTimeout(() => setStartingJob(null), 300);
-  };
-
-  // Available products (expand this as more products are added)
-  const availableProducts = [
-    { id: 'basic_sidearm', name: 'Basic Sidearm', methods: basicSidearmMethods },
-    { id: 'tactical_knife', name: 'Tactical Knife', methods: tacticalKnifeMethods }
-  ];
-
-  const selectedProductData = availableProducts.find(p => p.id === selectedProduct);
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-sm text-gray-400 mb-2">START NEW JOB</h3>
-        
-        {/* Product Selection Dropdown */}
-        <div className="mb-3">
-          <div className="text-xs text-gray-500 mb-1">Select Product:</div>
-          <select
-            value={selectedProduct}
-            onChange={(e) => setSelectedProduct(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-600 text-gray-300 text-xs p-2 focus:border-teal-400 focus:outline-none"
-          >
-            <option value="">-- Choose Product --</option>
-            {availableProducts.map(product => (
-              <option key={product.id} value={product.id}>
-                {product.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Method Selection */}
-        {selectedProductData && (
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Select Method:</div>
-            <div className="space-y-2">
-              {selectedProductData.methods.map(method => {
-                // NEW: Calculate net material requirements (consumption - production)
-                const materialBalance = new Map<string, { consumed: number; produced: number; tags?: string[]; maxQuality?: number }>();
-                
-                // Track consumption and production across all operations
-                method.operations.forEach(op => {
-                  // Track consumption
-                  if (op.materialConsumption) {
-                    op.materialConsumption.forEach(mc => {
-                      // For consumption, use only the meaningful state tags (rough, precision, assembly, casing)
-                      const stateTags = mc.tags?.filter(tag => ['rough', 'precision', 'assembly', 'casing'].includes(tag)).sort() || [];
-                      const key = `${mc.itemId}-${stateTags.join(',')}`;
-                      const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
-                      materialBalance.set(key, {
-                        consumed: existing.consumed + mc.count,
-                        produced: existing.produced,
-                        tags: mc.tags,
-                        maxQuality: mc.maxQuality
-                      });
-                    });
-                  }
-                  
-                  // Track production  
-                  if (op.materialProduction) {
-                    op.materialProduction.forEach(mp => {
-                      // For production, also use only meaningful state tags for key matching
-                      const stateTags = mp.tags?.filter(tag => ['rough', 'precision', 'assembly', 'casing'].includes(tag)).sort() || [];
-                      const key = `${mp.itemId}-${stateTags.join(',')}`;
-                      const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
-                      materialBalance.set(key, {
-                        consumed: existing.consumed,
-                        produced: existing.produced + mp.count,
-                        tags: mp.tags,
-                        maxQuality: existing.maxQuality
-                      });
-                    });
-                  }
-                  
-                  // Legacy format: material_requirements
-                  if (op.material_requirements) {
-                    op.material_requirements.forEach(req => {
-                      const key = `${req.material_id}-${req.required_tags?.join(',') || 'any'}`;
-                      const existing = materialBalance.get(key) || { consumed: 0, produced: 0 };
-                      materialBalance.set(key, {
-                        consumed: existing.consumed + req.quantity,
-                        produced: existing.produced,
-                        tags: req.required_tags,
-                        maxQuality: req.max_quality
-                      });
-                    });
-                  }
-                });
-                
-                // Only check materials with net consumption (consumed > produced)
-                const netRequiredMaterials: Array<{
-                  material_id: string;
-                  quantity: number;
-                  required_tags?: string[];
-                  max_quality?: number;
-                }> = [];
-                for (const [key, balance] of materialBalance) {
-                  const netConsumption = balance.consumed - balance.produced;
-                  if (netConsumption > 0) {
-                    const itemId = key.split('-')[0];
-                    netRequiredMaterials.push({
-                      material_id: itemId,
-                      quantity: netConsumption,
-                      required_tags: balance.tags,
-                      max_quality: balance.maxQuality
-                    });
-                  }
-                }
-                
-                // Debug logging removed - component methods working correctly
-                
-                // Check availability and track missing materials
-                const missingMaterials: string[] = [];
-                const hasAllMaterials = netRequiredMaterials.every(mat => {
-                  const materialId = mat.material_id;
-                  const quantity = mat.quantity;
-                  const requiredTags = mat.required_tags;
-                  const maxQuality = mat.max_quality;
-                  
-                  let available: number;
-                  if (facility.inventory) {
-                    if (requiredTags && requiredTags.length > 0) {
-                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, materialId, requiredTags as ItemTag[], maxQuality);
-                    } else {
-                      available = inventoryManager.getAvailableQuantity(facility.inventory, materialId);
-                    }
-                  } else {
-                    available = facility.current_storage[materialId] || 0;
-                  }
-                  
-                  const hasEnough = available >= quantity;
-                  if (!hasEnough) {
-                    const tagDisplay = requiredTags && requiredTags.length > 0 ? ` [${requiredTags.join(', ')}]` : '';
-                    const qualityDisplay = maxQuality !== undefined ? ` (≤${maxQuality}%)` : '';
-                    missingMaterials.push(`${quantity} ${materialId}${tagDisplay}${qualityDisplay} (have: ${available})`);
-                  }
-                  return hasEnough;
-                });
-                
-                return (
-                  <div key={method.id} className="border border-gray-600 bg-gray-900">
-                    <div className="p-2">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="font-bold text-teal-400 text-xs">{method.name}</div>
-                          <div className="text-gray-400 text-xs">{method.description}</div>
-                          <div className="text-gray-500 text-xs mt-1">
-                            {method.operations.length} operations, ~{method.operations.reduce((sum, op) => sum + op.baseDurationMinutes, 0)} min
-                          </div>
-                        </div>
-                        <div className="flex gap-1 ml-2">
-                          <button
-                            onClick={() => setShowMethodDetails(showMethodDetails === method.id ? null : method.id)}
-                            className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 text-xs border border-gray-600"
-                          >
-                            Details
-                          </button>
-                          <button
-                            onClick={() => handleStartJob(facility.id, selectedProduct!, method.id, 1)}
-                            disabled={!hasAllMaterials}
-                            title={!hasAllMaterials ? `Missing materials:\n${missingMaterials.join('\n')}` : ''}
-                            className={`px-3 py-1 text-xs border transition-colors ${
-                              !hasAllMaterials
-                                ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
-                                : startingJob === method.id 
-                                  ? 'bg-green-700 border-green-500 text-green-100' 
-                                  : 'bg-teal-800 hover:bg-teal-700 text-teal-100 border-teal-600'
-                            }`}
-                          >
-                            {!hasAllMaterials ? 'No Materials' : startingJob === method.id ? 'Started!' : 'Start'}
-                          </button>
-                        </div>
-                      </div>
-                    
-                    {/* Method Details */}
-                    {showMethodDetails === method.id && (
-                      <div className="mt-3 pt-3 border-t border-gray-700">
-                        <div className="text-xs">
-                          {/* NEW: Show operation flow for component-based methods */}
-                          {method.id.includes('component') ? (
-                            <div className="mb-3">
-                              <span className="text-gray-500">Component Flow:</span>
-                              <div className="ml-2 space-y-2 mt-2">
-                                {method.operations.map((op, idx) => (
-                                  <div key={op.id} className="text-xs">
-                                    <div className="text-yellow-400 font-semibold">
-                                      {idx + 1}. {op.name} ({op.baseDurationMinutes}min)
-                                    </div>
-                                    <div className="ml-3 text-gray-400">
-                                      {op.materialConsumption && op.materialConsumption.length > 0 && (
-                                        <div>
-                                          <span className="text-red-300">Consumes:</span>
-                                          {op.materialConsumption.map(mc => (
-                                            <span key={mc.itemId} className="ml-1">
-                                              {mc.count} {mc.itemId.replace(/-/g, ' ')}
-                                              {mc.tags && mc.tags.length > 0 && <span className="text-blue-300"> [{mc.tags.join(', ')}]</span>}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {op.materialProduction && op.materialProduction.length > 0 && (
-                                        <div>
-                                          <span className="text-green-300">Produces:</span>
-                                          {op.materialProduction.map(mp => (
-                                            <span key={mp.itemId} className="ml-1">
-                                              {mp.count} {mp.itemId.replace(/-/g, ' ')}
-                                              {mp.tags && mp.tags.length > 0 && <span className="text-blue-300"> [{mp.tags.join(', ')}]</span>}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {!op.materialConsumption && !op.materialProduction && (
-                                        <div className="text-gray-500">Preparation step</div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            /* Legacy materials display */
-                            <div className="mb-2">
-                              <span className="text-gray-500">Materials:</span>
-                              <div className="ml-2 space-y-1">
-                                {method.operations.flatMap(op => op.material_requirements || []).map((mat, idx) => {
-                                  // Check availability from new inventory or legacy storage
-                                  let available: number;
-                                  if (facility.inventory) {
-                                    if (mat.required_tags && mat.required_tags.length > 0) {
-                                      available = inventoryManager.getAvailableQuantityWithTags(facility.inventory, mat.material_id, mat.required_tags as ItemTag[], mat.max_quality);
-                                    } else {
-                                      available = inventoryManager.getAvailableQuantity(facility.inventory, mat.material_id);
-                                    }
-                                  } else {
-                                    available = facility.current_storage[mat.material_id] || 0;
-                                  }
-                                  const hasEnough = available >= mat.quantity;
-                                  
-                                  const tagDisplay = mat.required_tags && mat.required_tags.length > 0 
-                                    ? ` [${mat.required_tags.join(', ')}]` 
-                                    : '';
-                                  const qualityDisplay = mat.max_quality !== undefined 
-                                    ? ` (≤${mat.max_quality}%)` 
-                                    : '';
-                                
-                                return (
-                                  <div key={idx} className={hasEnough ? "text-gray-400" : "text-red-400"}>
-                                    • {mat.material_id}{tagDisplay}{qualityDisplay}: {mat.quantity} {mat.consumed_at_start ? '(consumed at start)' : '(consumed at end)'}
-                                    <span className="ml-2 text-xs">
-                                      (Available: {available})
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              {method.operations.every(op => !op.material_requirements || op.material_requirements.length === 0) && (
-                                <div className="text-gray-400">No materials required</div>
-                              )}
-                            </div>
-                            </div>
-                          )}
-                          
-                          {/* Operations display (for both types) */}
-                          {!method.id.includes('component') && (
-                            <div>
-                              <span className="text-gray-500">Operations:</span>
-                              <div className="ml-2 space-y-1">
-                                {method.operations.map((op, idx) => (
-                                  <div key={op.id} className="text-gray-400">
-                                    {idx + 1}. {op.name} ({op.baseDurationMinutes}min) - {op.description}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-    </div>
-  );
-}
 
 function JobCompletionNotifications() {
   const notifications = useGameStore(state => state.jobCompletionNotifications);
@@ -981,6 +1076,15 @@ export function MachineWorkspaceView() {
     gameTime
   } = useGameStore();
   
+  // Force re-render every 2 seconds to ensure job progress updates are visible
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshKey(prev => prev + 1);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+  
   const facility = facilities.find(f => f.id === selectedFacilityId);
   
   if (!facility) {
@@ -1022,12 +1126,15 @@ export function MachineWorkspaceView() {
       {/* Implementation Status Notice */}
       <div className="terminal-card border-green-600 mb-4">
         <div className="text-center">
-          <div className="text-green-400 font-mono text-lg mb-2">✓ MANUFACTURING V1 COMPLETE</div>
+          <div className="text-green-400 font-mono text-lg mb-2">✅ EVENT-DRIVEN ARCHITECTURE ACTIVE</div>
           <div className="text-gray-400 text-sm">
-            Machine workspace system with facility-wide job queues and real-time job notifications fully functional.
+            Jobs are now processed using an event-driven system for optimal performance.
           </div>
         </div>
       </div>
+      
+      {/* Job State Manager Debug Panel */}
+      <JobStateDebugPanel />
       
       {/* Machine cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -1049,11 +1156,8 @@ export function MachineWorkspaceView() {
         })}
       </div>
       
-      {/* Production interface */}
-      <ProductionInterface facility={facility} />
-      
-      {/* Unified job list */}
-      <UnifiedJobList workspace={workspace} allJobs={allJobs} />
+      {/* Job management */}
+      <UnifiedJobList workspace={workspace} facility={facility} equipmentDatabase={equipmentDatabase} allJobs={allJobs} />
       
       {/* Summary stats */}
       <div className="mt-4 pt-4 border-t border-gray-700 text-xs text-gray-500">

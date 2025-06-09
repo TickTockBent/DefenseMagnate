@@ -103,7 +103,7 @@ export function createGarage(name: string): Facility {
     
     production_lines: 1,
     max_item_size: 'small',
-    storage_capacity: 100,
+    storage_capacity: 1000,
     floor_space: 50,
     used_floor_space: 0,
     
@@ -133,18 +133,25 @@ export function createGarage(name: string): Facility {
     current_storage: {
       // Starter materials for testing - enough for 2-3 jobs each
       
-      // For Forge method (steel + plastic) - 3 jobs worth
-      steel: 5,
-      plastic: 2,
-      
-      // For Restore method (damaged weapons + spares) - 3 jobs worth  
-      damaged_basic_sidearm: 3,
-      low_tech_spares: 20, // Used by both restore and cobble methods
-      
-      // Additional useful materials
+      // Raw materials for manufacturing
+      steel: 20,
+      plastic: 15,
       aluminum: 2,
+      
+      // Components for assembly/repair (based on baseItem definitions)
+      'mechanical-component': 30, // For creating mechanical-assembly (10x needed per assembly)
+      'small-tube': 5, // Direct component for basic_sidearm  
+      'small-casing': 5, // Direct component for basic_sidearm
+      'mechanical-assembly': 3, // Pre-made assemblies for repairs
+      
+      // Repair and restoration materials
+      damaged_basic_sidearm: 3,
+      low_tech_spares: 20, // Fallback repair materials
+      
+      // Additional useful materials  
       basic_electronics: 3,
-      machined_parts: 5
+      machined_parts: 5,
+      cleaning_supplies: 10 // For treatment workflows
     },
     pending_upgrades: [],
     

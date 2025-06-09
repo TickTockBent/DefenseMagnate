@@ -16,6 +16,53 @@ Defense Magnate is a browser-based management simulation where you:
 
 ## 🔧 Recent Updates
 
+### 📋 **Patch Notes v1.5 - Manufacturing v2 Arc (January 2025)** ⚡
+
+This major update introduces event-driven job management with dynamic assignment, enhanced UI for sub-operation tracking, and comprehensive material validation systems.
+
+#### **🎯 Event-Driven Job Assignment Coordinator**
+- **⚡ Dynamic Job Scheduling**: JobAssignmentCoordinator automatically assigns jobs to best available machines based on compatibility scoring
+- **🔄 Real-Time Assignment**: Jobs are assigned immediately when machines become available, eliminating polling overhead
+- **📊 Machine Capability Scoring**: Logarithmic compatibility scoring system prioritizes precision equipment over basic tools
+- **🎮 Optimal Machine Selection**: Jobs now go to the fastest/best machine instead of first available machine
+- **⚠️ Equipment Availability Events**: Machine availability triggers immediate job assignment evaluation
+
+#### **🏗️ Enhanced Job State Management**
+- **📱 Event-Driven Architecture**: Replaced polling-based job management with reactive event system for better performance
+- **🔄 Job Readiness States**: Comprehensive state tracking (READY, BLOCKED_BY_MATERIALS, BLOCKED_BY_DEPENDENCIES, IN_PROGRESS, COMPLETED)
+- **⏱️ Real-Time Progress**: Sub-operations show live progress with machine assignments and completion status
+- **🎯 Sub-Operation Tracking**: Individual operations within jobs tracked separately for parallel execution
+- **📊 Facility-Wide Coordination**: Global job state manager coordinates work across all machines
+
+#### **🎨 Advanced Job Management UI**
+- **📋 Unified Job Display**: Merged separate job queue and active job displays into comprehensive view with persistent expansion states
+- **⚙️ Sub-Operation Details**: Detailed breakdown showing individual operations, machine assignments, and material flows
+- **🎯 Expected Outcomes**: Clear display of final outputs from manufacturing workflows
+- **📦 Job Inventory Tracking**: Real-time display of materials and intermediate products within job inventories
+- **🔧 Smart Cancellation**: Context-aware cancel buttons with material recovery preview
+- **📈 Progress Visualization**: Color-coded operation states with completion percentages and time estimates
+
+#### **🔧 Manufacturing Workflow Improvements**
+- **🏗️ Component-Based Repair**: Fixed repair workflows to use actual assembly components instead of placeholder materials
+- **⏳ Backwards Planning**: Repair jobs properly disassemble → inspect → repair → reassemble using baseItem definitions
+- **🔄 Material Flow Tracking**: Just-in-time material movement ensures components are available when operations need them
+- **📊 Operation Dependencies**: Sequential operation execution with proper dependency checking
+- **⚡ Parallel Execution**: Sub-operations can run on different machines simultaneously when materials are available
+
+#### **🧹 Inventory System Cleanup**
+- **✅ Material Validation**: Comprehensive validation of all manufacturing operations against baseItem definitions
+- **🧹 Undefined Item Cleanup**: Automatic removal of undefined items from inventories and catalogs
+- **🔍 Global Validation**: Console utilities for validating material references across all manufacturing methods
+- **📦 Inventory Integrity**: Fixed misleading success counters and improved error handling for inventory operations
+- **⚠️ Capacity Management**: Upgraded facility storage capacity from 100 to 1000 units with automatic migration
+
+#### **🎮 User Experience Enhancements**
+- **🏭 Workshop Tab**: Renamed "Manufacturing" tab to "Workshop" for clearer terminology
+- **🗑️ Legacy UI Removal**: Removed old product selection dropdown and outdated interface components
+- **📊 Job State Debug Panel**: Added real-time statistics showing ready, active, blocked, and completed job counts
+- **⚡ Performance Optimizations**: Event-driven architecture reduces CPU usage and improves responsiveness
+- **🎯 Visual Feedback**: Enhanced machine activity indicators and job status display
+
 ### 📋 **Patch Notes v1.4 - Disassembly v1 Arc (January 2025)** 🔧
 
 This major update introduces component-based manufacturing with intermediate product tracking, job cancellation with material recovery, and disassembly operations.
