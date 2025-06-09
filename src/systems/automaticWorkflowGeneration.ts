@@ -433,11 +433,19 @@ export class AutomaticWorkflowGeneration {
     materialRequirements: MaterialRequirement[]
   ): DynamicOperation {
     // Estimate material needs based on item condition
-    const materialNeeded = Math.round(baseItem.baseValue * 0.3 * (100 - item.quality) / 100);
+    // For repairs, we need spare parts proportional to damage, not monetary value
+    // A fully damaged item (0% quality) might need 20% of original materials
+    // A slightly damaged item (80% quality) might need 5% of original materials
+    const damagePercentage = (100 - item.quality) / 100;
+    const repairMaterialFactor = 0.2; // Max 20% of original materials for full repair
+    
+    // Base material need on item type - simple items need 1-2 units for repair
+    const baseMaterialNeed = baseItem.manufacturingType === ItemManufacturingType.ASSEMBLY ? 2 : 1;
+    const materialNeeded = Math.max(1, Math.round(baseMaterialNeed * damagePercentage * repairMaterialFactor * 5));
     
     // Add estimated material requirements
     materialRequirements.push({
-      material_id: 'steel', // Primary structural material
+      material_id: 'low_tech_spares', // Use spare parts instead of raw steel
       quantity: materialNeeded,
       consumed_at_start: false
     });
@@ -453,7 +461,7 @@ export class AutomaticWorkflowGeneration {
       },
       baseDurationMinutes: 45 * item.quantity,
       materialConsumption: [{
-        itemId: 'steel',
+        itemId: 'low_tech_spares',
         count: materialNeeded,
         tags: []
       }],
@@ -466,6 +474,10 @@ export class AutomaticWorkflowGeneration {
   }
 
   private static createReassemblyOperation(item: ItemInstance, baseItem: BaseItem): DynamicOperation {
+    // For assembly operations, we need the constituent components
+    // TODO: This should be dynamic based on the actual item definition
+    // For now, we'll use the basic sidearm component structure
+    
     return {
       id: `reassemble_${Date.now()}`,
       name: 'Final Assembly',
@@ -476,6 +488,26 @@ export class AutomaticWorkflowGeneration {
         minimum: 3
       },
       baseDurationMinutes: 35 * item.quantity,
+      materialConsumption: [
+        {
+          itemId: 'mechanical_assembly',
+          count: 1 * item.quantity,
+          tags: [], // No damaged components allowed (will be filtered by quality)
+          maxQuality: undefined // No upper limit, but system should filter by minQuality
+        },
+        {
+          itemId: 'small_tube',
+          count: 1 * item.quantity,
+          tags: [], // No damaged components allowed
+          maxQuality: undefined
+        },
+        {
+          itemId: 'small_casing',
+          count: 1 * item.quantity,
+          tags: [], // No damaged components allowed
+          maxQuality: undefined
+        }
+      ],
       materialProduction: [{
         itemId: baseItem.id,
         count: item.quantity,

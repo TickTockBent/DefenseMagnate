@@ -15,7 +15,8 @@ import {
   JobPriority,
   ItemInstance,
   ItemTag,
-  ItemManufacturingType
+  ItemManufacturingType,
+  OperationType
 } from '../types'; // Using barrel exports
 import { TIME_SCALE, type GameTime } from '../utils/gameClock';
 import { inventoryManager } from '../utils/inventoryManager';
@@ -192,49 +193,9 @@ export class MachineWorkspaceManager {
     const facility = this.facilities.get(facilityId);
     if (!facility) throw new Error('Facility not found');
     
-    // Check if this is a Manufacturing v2 method and generate dynamic workflow
-    const isManufacturingV2 = method.id.includes('v2') || method.name.includes('v2');
+    // All jobs now use dynamic workflows - unified system
     let actualMethod = method;
-    
-    if (isManufacturingV2) {
-      console.log(`Manufacturing v2 job detected: ${method.name} - generating dynamic workflow`);
-      
-      // Convert facility inventory to ItemInstance array for workflow generation
-      const facilityInventoryArray: ItemInstance[] = [];
-      if (facility.inventory) {
-        for (const group of facility.inventory.groups.values()) {
-          for (const slot of group.slots) {
-            for (const instance of slot.stack.instances) {
-              facilityInventoryArray.push(instance);
-            }
-          }
-        }
-      }
-      
-      try {
-        // Generate dynamic workflow based on actual facility inventory
-        actualMethod = ManufacturingV2Integration.generateDynamicMethod(
-          productId,
-          quantity,
-          [], // No specific input items for "forge new"
-          facilityInventoryArray,
-          enhancementSelection,
-          facility
-        );
-        
-        // Preserve the original method identification
-        actualMethod.id = method.id;
-        actualMethod.name = method.name;
-        actualMethod.description = method.description;
-        
-        console.log(`Generated dynamic Manufacturing v2 workflow with ${actualMethod.operations.length} operations:`, 
-          actualMethod.operations.map(op => op.name));
-      } catch (error) {
-        console.error(`Failed to generate dynamic Manufacturing v2 workflow:`, error);
-        console.log(`Falling back to static method for job ${productId}`);
-        // Keep using the original method as fallback
-      }
-    }
+    console.log(`Creating job for ${method.name}`);
     
     // Create job inventory
     const jobInventory = inventoryManager.createEmptyInventory(100); // Small capacity for job
@@ -243,7 +204,7 @@ export class MachineWorkspaceManager {
       id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       facilityId,
       productId,
-      method: actualMethod, // Use the dynamically generated method
+      method: actualMethod,
       quantity,
       priority,
       rushOrder,
@@ -259,9 +220,8 @@ export class MachineWorkspaceManager {
       // Initialize material tracking (legacy)
       consumedMaterials: new Map(),
       
-      // MANUFACTURING V2: Initialize sub-operations if this is a v2 job
-      isManufacturingV2: isManufacturingV2,
-      subOperations: isManufacturingV2 ? new Map() : undefined,
+      // All jobs now use sub-operations for dynamic execution
+      subOperations: new Map(),
       
       // PHASE 2: Enhancement selection
       enhancementSelection
@@ -275,22 +235,20 @@ export class MachineWorkspaceManager {
     
     console.log(`Job ${job.id} added to facility queue for ${job.method.operations[0]?.name}`);
     
-    // MANUFACTURING V2: Initialize sub-operations for dynamic execution
-    if (isManufacturingV2) {
-      this.initializeSubOperations(job, facility);
-    }
+    // Initialize sub-operations for all jobs
+    this.initializeSubOperations(job, facility);
     
     return job;
   }
   
-  // MANUFACTURING V2: Initialize sub-operations within the parent job
+  // Initialize sub-operations within the parent job
   private initializeSubOperations(job: MachineSlotJob, facility: Facility): void {
-    if (!job.isManufacturingV2 || !job.subOperations) {
-      console.warn(`Job ${job.id} is not a Manufacturing v2 job, cannot initialize sub-operations`);
+    if (!job.subOperations) {
+      console.warn(`Job ${job.id} has no sub-operations map`);
       return;
     }
     
-    console.log(`Manufacturing v2: Initializing sub-operations for job ${job.id} with ${job.method.operations.length} operations`);
+    console.log(`Initializing sub-operations for job ${job.id} with ${job.method.operations.length} operations`);
     
     // Create sub-operations for each operation in the method
     job.method.operations.forEach((operation, index) => {
@@ -309,11 +267,11 @@ export class MachineWorkspaceManager {
     this.evaluateSubOperationReadiness(job, facility);
   }
   
-  // MANUFACTURING V2: Evaluate which sub-operations are ready to be queued
+  // Evaluate which sub-operations are ready to be queued
   private evaluateSubOperationReadiness(job: MachineSlotJob, facility: Facility): void {
-    if (!job.isManufacturingV2 || !job.subOperations) return;
+    if (!job.subOperations) return;
     
-    console.log(`Manufacturing v2: Evaluating sub-operation readiness for job ${job.id}`);
+    console.log(`Evaluating sub-operation readiness for job ${job.id}`);
     
     // Check each pending sub-operation to see if it can start
     for (const [index, subOp] of job.subOperations) {
@@ -329,12 +287,25 @@ export class MachineWorkspaceManager {
     }
   }
   
-  // MANUFACTURING V2: Check if a sub-operation can start based on available materials
+  // Check if a sub-operation can start based on dependencies and available materials
   private canStartSubOperation(job: MachineSlotJob, subOp: JobSubOperation, facility: Facility): boolean {
     const operation = subOp.operation;
     
+    // FIRST: Check operation dependencies - must complete operations in sequence
+    if (subOp.operationIndex > 0) {
+      // Check if all previous operations are completed
+      for (let i = 0; i < subOp.operationIndex; i++) {
+        const previousSubOp = job.subOperations?.get(i);
+        if (!previousSubOp || previousSubOp.state !== 'completed') {
+          console.log(`Sub-operation ${subOp.operationIndex} (${subOp.operation.name}) blocked by incomplete operation ${i}`);
+          return false;
+        }
+      }
+    }
+    
+    // SECOND: Check material availability
     if (!operation.materialConsumption) {
-      return true; // No materials needed, can start immediately
+      return true; // No materials needed and dependencies satisfied
     }
     
     // Check each material requirement
@@ -351,7 +322,19 @@ export class MachineWorkspaceManager {
           consumption.maxQuality
         );
       } else {
-        available = inventoryManager.getAvailableQuantity(job.jobInventory, consumption.itemId);
+        // For assembly operations, exclude damaged items (require functional components)
+        if (operation.operationType === OperationType.ASSEMBLY) {
+          // Get all items of this type
+          const allItems = inventoryManager.getAllItems(job.jobInventory)
+            .filter(item => item.baseItemId === consumption.itemId);
+          
+          // Count only non-damaged items (functional components)
+          available = allItems
+            .filter(item => !item.tags.includes(ItemTag.DAMAGED))
+            .reduce((sum, item) => sum + item.quantity, 0);
+        } else {
+          available = inventoryManager.getAvailableQuantity(job.jobInventory, consumption.itemId);
+        }
       }
       
       // For raw materials, also check facility inventory
@@ -436,97 +419,76 @@ export class MachineWorkspaceManager {
     return subJob;
   }
   
-  // Move materials from facility to job inventory
+  // Move initial materials for job start - backwards planning approach
   private moveJobMaterials(job: MachineSlotJob, facility: Facility): void {
     if (!facility.inventory) {
       console.warn('Facility has no inventory system');
       return;
     }
     
-    // Check if this is a Manufacturing v2 method (has "v2" in the name/id)
-    const isManufacturingV2 = job.method.id.includes('v2') || job.method.name.includes('v2');
+    // Backwards planning approach: Only move input items for the workflow
+    // Materials for operations are moved just-in-time when operations start
     
-    // Collect materials needed
-    const materialsNeeded = new Map<string, { count: number; tags?: ItemTag[]; maxQuality?: number }>();
-    
-    if (isManufacturingV2) {
-      // Manufacturing v2: Only reserve raw materials upfront, intermediate components created dynamically
-      console.log(`Manufacturing v2 job ${job.id}: Only reserving raw materials`);
+    // For repair workflows, move the damaged item being repaired
+    if (job.method.name.toLowerCase().includes('repair')) {
+      console.log(`Repair job ${job.id}: Looking for damaged item to repair`);
       
-      for (const operation of job.method.operations) {
-        if (operation.materialConsumption) {
-          for (const consumption of operation.materialConsumption) {
-            // Only reserve raw materials - check if item is raw material
-            const baseItem = getBaseItem(consumption.itemId);
-            if (baseItem?.manufacturingType === ItemManufacturingType.RAW_MATERIAL) {
-              const key = `${consumption.itemId}-${consumption.tags?.join(',') || 'any'}`;
-              const existing = materialsNeeded.get(key);
-              materialsNeeded.set(key, {
-                count: (existing?.count || 0) + consumption.count * job.quantity,
-                tags: consumption.tags,
-                maxQuality: consumption.maxQuality
-              });
-            }
-          }
+      // Find the damaged item in facility inventory that matches the target product
+      const damagedItems = inventoryManager.getAllItems(facility.inventory)
+        .filter(item => {
+          return item.baseItemId === job.productId && 
+                 (item.tags.includes(ItemTag.DAMAGED) || item.quality < 50);
+        })
+        .slice(0, job.quantity); // Only take what we need
+      
+      if (damagedItems.length > 0) {
+        for (const item of damagedItems) {
+          inventoryManager.removeItem(facility.inventory, item.id, item.quantity);
+          inventoryManager.addItem(job.jobInventory, item);
+          console.log(`Moved damaged ${item.baseItemId} to repair job ${job.id}`);
         }
-      }
-    } else {
-      // Legacy methods: Reserve all materials upfront
-      console.log(`Legacy job ${job.id}: Reserving all materials`);
-      
-      for (const operation of job.method.operations) {
-        if (operation.materialConsumption) {
-          for (const consumption of operation.materialConsumption) {
-            const key = `${consumption.itemId}-${consumption.tags?.join(',') || 'any'}`;
-            const existing = materialsNeeded.get(key);
-            materialsNeeded.set(key, {
-              count: (existing?.count || 0) + consumption.count * job.quantity,
-              tags: consumption.tags,
-              maxQuality: consumption.maxQuality
-            });
-          }
-        } else if (operation.material_requirements) {
-          for (const req of operation.material_requirements) {
-            const key = `${req.material_id}-${req.required_tags?.join(',') || 'any'}`;
-            const existing = materialsNeeded.get(key);
-            materialsNeeded.set(key, {
-              count: (existing?.count || 0) + req.quantity * job.quantity,
-              tags: req.required_tags,
-              maxQuality: req.max_quality
-            });
-          }
-        }
-      }
-    }
-    
-    // Move materials from facility to job
-    for (const [key, requirement] of materialsNeeded) {
-      const itemId = key.split('-')[0];
-      let itemsToMove: ItemInstance[];
-      
-      if (requirement.tags && requirement.tags.length > 0) {
-        itemsToMove = inventoryManager.getBestQualityItemsWithTags(
-          facility.inventory,
-          itemId,
-          requirement.count,
-          requirement.tags,
-          requirement.maxQuality
-        );
       } else {
-        itemsToMove = inventoryManager.getBestQualityItems(
-          facility.inventory,
-          itemId,
-          requirement.count
-        );
+        console.warn(`No damaged ${job.productId} found for repair job ${job.id}`);
       }
       
-      // Move items to job inventory
-      for (const item of itemsToMove) {
-        inventoryManager.removeItem(facility.inventory, item.id, item.quantity);
-        inventoryManager.addItem(job.jobInventory, item);
+    } else if (job.method.name.toLowerCase().includes('disassembl')) {
+      console.log(`Disassembly job ${job.id}: Looking for item to disassemble`);
+      
+      // For disassembly jobs, we need to find the input item from the first operation's material consumption
+      const firstOperation = job.method.operations[0];
+      if (firstOperation && firstOperation.materialConsumption && firstOperation.materialConsumption.length > 0) {
+        const inputItemId = firstOperation.materialConsumption[0].itemId;
+        const requiredTags = firstOperation.materialConsumption[0].tags || [];
+        
+        console.log(`Disassembly job ${job.id}: Looking for ${inputItemId} with tags:`, requiredTags);
+        
+        // Find items that match the required criteria
+        const allItems = inventoryManager.getAllItems(facility.inventory);
+        const suitableItems = allItems.filter(item => {
+          const matchesItemId = item.baseItemId === inputItemId;
+          const matchesTags = requiredTags.length === 0 || requiredTags.every(tag => item.tags.includes(tag));
+          return matchesItemId && matchesTags;
+        }).slice(0, job.quantity);
+        
+        console.log(`Found ${suitableItems.length} suitable items for disassembly`);
+        
+        for (const item of suitableItems) {
+          inventoryManager.removeItem(facility.inventory, item.id, item.quantity);
+          inventoryManager.addItem(job.jobInventory, item);
+          console.log(`Moved ${item.baseItemId} (tags: ${item.tags}) to disassembly job ${job.id}`);
+        }
+        
+        if (suitableItems.length === 0) {
+          console.warn(`No suitable ${inputItemId} found for disassembly job ${job.id}`);
+        }
+      } else {
+        console.error(`Disassembly job ${job.id} has no material consumption defined in first operation`);
       }
       
-      console.log(`Moved ${itemsToMove.length} ${itemId} items to job ${job.id}`);
+    } else {
+      // For manufacturing jobs, don't move materials upfront
+      // Materials will be moved just-in-time when each operation starts
+      console.log(`Manufacturing job ${job.id}: Materials will be moved just-in-time`);
     }
   }
   
@@ -552,7 +514,7 @@ export class MachineWorkspaceManager {
   // Check if operation can start (materials available in job inventory)
   private canStartOperation(job: MachineSlotJob, facility: Facility): boolean {
     const operation = job.method.operations[job.currentOperationIndex];
-    const isManufacturingV2 = job.method.id.includes('v2') || job.method.name.includes('v2');
+    // All jobs now use the unified dynamic system
     
     // NEW: Check materialConsumption first
     if (operation.materialConsumption) {
@@ -560,8 +522,8 @@ export class MachineWorkspaceManager {
         const needed = consumption.count * job.quantity;
         let available: number;
         
-        // For Manufacturing v2, check both job inventory AND facility inventory for raw materials
-        if (isManufacturingV2) {
+        // Check both job inventory AND facility inventory for raw materials
+        {
           const baseItem = getBaseItem(consumption.itemId);
           const isRawMaterial = baseItem?.manufacturingType === ItemManufacturingType.RAW_MATERIAL;
           
@@ -590,22 +552,10 @@ export class MachineWorkspaceManager {
               
             available += facilityAvailable;
           }
-        } else {
-          // Legacy: Only check job inventory
-          if (consumption.tags && consumption.tags.length > 0) {
-            available = inventoryManager.getAvailableQuantityWithTags(
-              job.jobInventory, 
-              consumption.itemId, 
-              consumption.tags, 
-              consumption.maxQuality
-            );
-          } else {
-            available = inventoryManager.getAvailableQuantity(job.jobInventory, consumption.itemId);
-          }
         }
         
         if (available < needed) {
-          console.log(`Job ${job.id} lacks materials: need ${needed} ${consumption.itemId}, have ${available} (${isManufacturingV2 ? 'Manufacturing v2' : 'Legacy'})`);
+          console.log(`Job ${job.id} lacks materials: need ${needed} ${consumption.itemId}, have ${available}`);
           return false;
         }
       }
@@ -642,10 +592,10 @@ export class MachineWorkspaceManager {
   // Consume materials for current operation (from job inventory)
   private consumeOperationMaterials(job: MachineSlotJob, facility: Facility): void {
     const operation = job.method.operations[job.currentOperationIndex];
-    const isManufacturingV2 = job.method.id.includes('v2') || job.method.name.includes('v2');
+    // All jobs now use the unified dynamic system
     
-    // Manufacturing v2: Pull raw materials from facility if needed
-    if (isManufacturingV2 && operation.materialConsumption) {
+    // Pull raw materials from facility if needed
+    if (operation.materialConsumption) {
       for (const consumption of operation.materialConsumption) {
         const needed = consumption.count * job.quantity;
         const baseItem = getBaseItem(consumption.itemId);
@@ -805,38 +755,10 @@ export class MachineWorkspaceManager {
     
     if (idleMachines.length === 0) return; // No idle machines
     
-    // MANUFACTURING V2: First pass - assign ready sub-operations from v2 jobs
+    // Assign ready sub-operations from all jobs
     this.assignSubOperations(workspace, facility, idleMachines);
     
-    // LEGACY: Second pass - try to assign legacy jobs from queue
-    for (let i = workspace.jobQueue.length - 1; i >= 0; i--) {
-      const job = workspace.jobQueue[i];
-      
-      // Skip Manufacturing v2 jobs (handled by sub-operations)
-      if (job.isManufacturingV2) continue;
-      
-      // Find a suitable machine for this job's current operation
-      const suitableMachine = this.findAvailableMachineForJob(job, idleMachines, facility);
-      
-      if (suitableMachine && this.canStartOperation(job, facility)) {
-        // Remove job from queue
-        workspace.jobQueue.splice(i, 1);
-        
-        // Assign to machine
-        this.startJobOnMachine(job, suitableMachine, facility);
-        
-        // Remove this machine from idle list
-        const machineIndex = idleMachines.indexOf(suitableMachine);
-        if (machineIndex > -1) {
-          idleMachines.splice(machineIndex, 1);
-        }
-        
-        console.log(`Assigned legacy job ${job.id} from queue to machine ${suitableMachine.machineId}`);
-        
-        // Stop if no more idle machines
-        if (idleMachines.length === 0) break;
-      }
-    }
+    // All jobs now use sub-operations - no legacy queue assignment needed
   }
   
   // MANUFACTURING V2: Assign ready sub-operations to idle machines
@@ -851,9 +773,9 @@ export class MachineWorkspaceManager {
         .filter(job => job !== undefined) as MachineSlotJob[]
     ];
     
-    // Look for Manufacturing v2 jobs with ready sub-operations
+    // Look for jobs with ready sub-operations
     for (const job of allJobs) {
-      if (!job.isManufacturingV2 || !job.subOperations) continue;
+      if (!job.subOperations) continue;
       if (idleMachines.length === 0) break;
       
       // Re-evaluate sub-operation readiness in case materials have become available
@@ -964,11 +886,34 @@ export class MachineWorkspaceManager {
           consumption.maxQuality
         );
       } else {
-        itemsToConsume = inventoryManager.getBestQualityItems(
-          job.jobInventory,
-          consumption.itemId,
-          needed
-        );
+        // For assembly operations, exclude damaged items (require functional components)
+        if (subOp.operation.operationType === OperationType.ASSEMBLY) {
+          // Get all items and filter out damaged ones
+          const allItems = inventoryManager.getAllItems(job.jobInventory)
+            .filter(item => item.baseItemId === consumption.itemId && !item.tags.includes(ItemTag.DAMAGED))
+            .sort((a, b) => b.quality - a.quality); // Sort by quality, best first
+          
+          // Take items up to needed quantity
+          itemsToConsume = [];
+          let remaining = needed;
+          for (const item of allItems) {
+            if (remaining <= 0) break;
+            const takeQuantity = Math.min(remaining, item.quantity);
+            if (takeQuantity > 0) {
+              itemsToConsume.push({
+                ...item,
+                quantity: takeQuantity
+              });
+              remaining -= takeQuantity;
+            }
+          }
+        } else {
+          itemsToConsume = inventoryManager.getBestQualityItems(
+            job.jobInventory,
+            consumption.itemId,
+            needed
+          );
+        }
       }
       
       // If not enough in job inventory, get from facility inventory (for raw materials)
@@ -1052,31 +997,60 @@ export class MachineWorkspaceManager {
     facility: Facility
   ): MachineSlot | null {
     const operation = job.method.operations[job.currentOperationIndex];
-    if (!operation) return null;
+    if (!operation) {
+      console.log(`DEBUG: No operation found for job ${job.id} at index ${job.currentOperationIndex}`);
+      return null;
+    }
+    
+    console.log(`DEBUG: Looking for machine for operation "${operation.name}"`);
+    console.log(`DEBUG: Operation requires:`, operation.requiredTag);
+    console.log(`DEBUG: Available machines:`, availableMachines.length);
     
     for (const machine of availableMachines) {
       const equipment = facility.equipment.find(e => e.id === machine.machineId);
-      if (!equipment) continue;
+      if (!equipment) {
+        console.log(`DEBUG: Machine ${machine.machineId} has no equipment record`);
+        continue;
+      }
       
       const def = this.equipmentDefinitions.get(equipment.equipmentId);
-      if (!def) continue;
+      if (!def) {
+        console.log(`DEBUG: Equipment ${equipment.equipmentId} has no definition`);
+        continue;
+      }
+      
+      console.log(`DEBUG: Checking machine ${machine.machineId} (${def.name})`);
+      console.log(`DEBUG: Equipment tags:`, def.tags);
       
       // Check if machine provides required tag
       const providesTag = def.tags.some(tag => {
-        if (tag.category !== operation.requiredTag.category) return false;
+        console.log(`DEBUG: Comparing tag ${tag.category} (value: ${tag.value}) with required ${operation.requiredTag.category} (min: ${operation.requiredTag.minimum})`);
+        
+        if (tag.category !== operation.requiredTag.category) {
+          console.log(`DEBUG: Tag category mismatch`);
+          return false;
+        }
         
         if (typeof operation.requiredTag.minimum === 'boolean') {
-          return tag.value === true;
+          const matches = tag.value === true;
+          console.log(`DEBUG: Boolean match: ${matches}`);
+          return matches;
         } else {
-          return typeof tag.value === 'number' && tag.value >= operation.requiredTag.minimum;
+          const matches = typeof tag.value === 'number' && tag.value >= operation.requiredTag.minimum;
+          console.log(`DEBUG: Numeric match: tag.value (${tag.value}) >= minimum (${operation.requiredTag.minimum}) = ${matches}`);
+          return matches;
         }
       });
       
+      console.log(`DEBUG: Machine ${machine.machineId} provides required tag: ${providesTag}`);
+      
       if (providesTag) {
+        console.log(`DEBUG: Selected machine ${machine.machineId} for operation ${operation.name}`);
         return machine;
       }
     }
     
+    console.log(`DEBUG: No suitable machine found for operation ${operation.name}`);
     return null;
   }
   
@@ -1105,13 +1079,21 @@ export class MachineWorkspaceManager {
     facility: Facility
   ): void {
     const job = machine.currentJob;
-    if (!job) return;
+    if (!job) {
+      console.log(`DEBUG: completeOperation called but no current job on machine`);
+      return;
+    }
+    
+    console.log(`DEBUG: Completing operation for job ${job.id}`);
     
     // Check if this is a Manufacturing v2 sub-operation
     if (job.id.includes('_subop_')) {
+      console.log(`DEBUG: Job ${job.id} is a sub-operation, using sub-operation completion logic`);
       this.completeSubOperation(workspace, machine, facility, job);
       return;
     }
+    
+    console.log(`DEBUG: Job ${job.id} is a regular job, using standard completion logic`);
     
     const operation = job.method.operations[job.currentOperationIndex];
     
@@ -1179,9 +1161,13 @@ export class MachineWorkspaceManager {
     facility: Facility,
     subOperationJob: MachineSlotJob
   ): void {
+    console.log(`DEBUG: Completing sub-operation ${subOperationJob.id}`);
+    
     // Find the parent job and sub-operation
     const parentJobId = subOperationJob.id.split('_subop_')[0];
     const subOpIndex = parseInt(subOperationJob.id.split('_subop_')[1]);
+    
+    console.log(`DEBUG: Looking for parent job ${parentJobId}, sub-operation index ${subOpIndex}`);
     
     // Find parent job in queue or active jobs
     const allJobs = [
@@ -1191,11 +1177,17 @@ export class MachineWorkspaceManager {
         .filter(job => job !== undefined) as MachineSlotJob[]
     ];
     
+    console.log(`DEBUG: Searching in ${allJobs.length} total jobs`);
+    console.log(`DEBUG: Job IDs available:`, allJobs.map(j => j.id));
+    
     const parentJob = allJobs.find(job => job.id === parentJobId);
     if (!parentJob || !parentJob.subOperations) {
-      console.error(`Could not find parent job ${parentJobId} for sub-operation ${subOperationJob.id}`);
+      console.error(`DEBUG: Could not find parent job ${parentJobId} for sub-operation ${subOperationJob.id}`);
+      console.error(`DEBUG: Parent job found: ${!!parentJob}, has subOperations: ${parentJob?.subOperations ? 'yes' : 'no'}`);
       return;
     }
+    
+    console.log(`DEBUG: Found parent job ${parentJob.id} with ${parentJob.subOperations.size} sub-operations`);
     
     const subOp = parentJob.subOperations.get(subOpIndex);
     if (!subOp) {

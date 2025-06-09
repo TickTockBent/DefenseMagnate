@@ -162,7 +162,8 @@ interface GameState {
     methodId: string,
     quantity: number,
     enhancementSelection?: import('../types').EnhancementSelection,
-    rushOrder?: boolean
+    rushOrder?: boolean,
+    dynamicMethod?: MachineBasedMethod
   ) => void;
   cancelMachineJob: (facilityId: string, jobId: string) => boolean;
   
@@ -594,17 +595,27 @@ export const useGameStore = create<GameState>((set, get) => ({
   */
   
   // New machine workspace system
-  startMachineJob: (facilityId, productId, methodId, quantity = 1, enhancementSelection, rushOrder = false) => {
+  startMachineJob: (facilityId, productId, methodId, quantity = 1, enhancementSelection, rushOrder = false, dynamicMethod) => {
     const state = get();
     const facility = state.facilities.find(f => f.id === facilityId);
-    if (!facility) return;
-    
-    // Get the method from available products first (fail fast)
-    let method = basicSidearmMethods.find(m => m.id === methodId);
-    if (!method) {
-      method = tacticalKnifeMethods.find(m => m.id === methodId);
+    if (!facility) {
+      console.error(`Cannot start job: facility ${facilityId} not found`);
+      return;
     }
-    if (!method) return;
+    
+    // Get the method - check dynamic method first, then predefined methods
+    let method = dynamicMethod;
+    if (!method) {
+      method = basicSidearmMethods.find(m => m.id === methodId);
+      if (!method) {
+        method = tacticalKnifeMethods.find(m => m.id === methodId);
+      }
+    }
+    
+    if (!method) {
+      console.error(`Cannot start job: method ${methodId} not found`);
+      return;
+    }
     
     // Ensure workspace is ready - but don't wait for state update
     let workspace = state.machineWorkspace;

@@ -8,7 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "npm run build && gh-pages -d dist"
+    "deploy": "npm run build && gh-pages -d dist",
+    "test": "node test/runTests.js",
+    "test:watch": "node --watch test/runTests.js",
+    "test:workflow": "node -e \"import('./test/runTests.js').then(m => m.validateWorkflowSystem())\"",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@types/node": "^22.15.29",

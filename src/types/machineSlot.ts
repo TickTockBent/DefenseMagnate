@@ -154,9 +154,8 @@ export interface MachineSlotJob {
   consumedMaterials?: Map<string, number>;
   finalQuality?: number;
   
-  // MANUFACTURING V2: Sub-operations system
+  // Sub-operations system (all jobs now use this)
   subOperations?: Map<number, JobSubOperation>; // Operation index -> sub-operation
-  isManufacturingV2?: boolean; // True if this uses the v2 sub-operations system
   
   // PHASE 2: Enhancement system
   enhancementSelection?: import('./enhancement').EnhancementSelection;

@@ -30,7 +30,8 @@ export function ContentPanel() {
     console.log('Converted to method:', method.name, 'with ID:', method.id);
 
     // Start the job using the target product from the plan
-    startMachineJob(facility.id, plan.targetProduct, method.id, plan.targetQuantity, enhancements);
+    // Pass the dynamic method object directly since it's not in predefined arrays
+    startMachineJob(facility.id, plan.targetProduct, method.id, plan.targetQuantity, enhancements, false, method);
     console.log('Job started successfully');
   };
 
