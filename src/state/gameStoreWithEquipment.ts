@@ -1166,6 +1166,41 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     
     return inventoryManager.getBestQualityItems(facility.inventory, baseItemId, quantity);
+  },
+  
+  // Clean up all inventories by removing undefined items
+  cleanupUndefinedItems: () => {
+    set(state => {
+      console.log('🧹 Starting global cleanup of undefined items...');
+      let totalRemovedCount = 0;
+      const allRemovedItems = new Set<string>();
+      
+      const updatedFacilities = state.facilities.map(facility => {
+        const updatedFacility = { ...facility };
+        
+        // Clean up new inventory system
+        if (updatedFacility.inventory) {
+          const result = inventoryManager.cleanInventoryUndefinedItems(updatedFacility.inventory);
+          totalRemovedCount += result.removedCount;
+          result.removedItems.forEach(item => allRemovedItems.add(item));
+        }
+        
+        // Clean up legacy storage
+        const legacyResult = inventoryManager.cleanLegacyStorageUndefinedItems(updatedFacility.current_storage);
+        totalRemovedCount += legacyResult.removedCount;
+        legacyResult.removedItems.forEach(item => allRemovedItems.add(item));
+        
+        return updatedFacility;
+      });
+      
+      console.log(`🧹 Global cleanup complete: removed ${totalRemovedCount} undefined items`);
+      console.log(`🧹 Undefined item types removed: ${Array.from(allRemovedItems).join(', ')}`);
+      
+      return {
+        ...state,
+        facilities: updatedFacilities
+      };
+    });
   }
 }));
 
@@ -1288,6 +1323,20 @@ useGameStore.setState({
     nextRefreshAt: 48 // Next refresh in 48 hours
   }
 });
+
+// Clean up any undefined items from inventories on startup
+setTimeout(() => {
+  console.log('🧹 Running startup cleanup of undefined items...');
+  useGameStore.getState().cleanupUndefinedItems();
+}, 100); // Small delay to ensure everything is initialized
+
+// Add global cleanup function for manual use (callable from console)
+if (typeof window !== 'undefined') {
+  (window as any).cleanupInventory = () => {
+    console.log('🧹 Manual inventory cleanup requested...');
+    useGameStore.getState().cleanupUndefinedItems();
+  };
+}
 
 // Set up job completion callback on the store's machine workspace manager
 useGameStore.getState().machineWorkspaceManager.setJobCompleteCallback((job) => {

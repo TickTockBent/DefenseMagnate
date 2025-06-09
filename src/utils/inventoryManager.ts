@@ -17,6 +17,85 @@ import { createItemInstance, calculateMarketValue, combineCompatibleItems } from
 
 export class InventoryManager {
   
+  // Clean up inventory by removing items not defined in baseItems
+  cleanInventoryUndefinedItems(inventory: FacilityInventory): { removedCount: number; removedItems: string[] } {
+    let removedCount = 0;
+    const removedItems: string[] = [];
+    
+    console.log('🧹 Cleaning inventory: removing undefined items...');
+    
+    for (const [category, group] of inventory.groups) {
+      const validSlots: InventorySlot[] = [];
+      
+      for (const slot of group.slots) {
+        const validInstances = slot.stack.instances.filter(instance => {
+          const baseItem = getBaseItem(instance.baseItemId);
+          if (!baseItem) {
+            console.log(`❌ Removing undefined item: ${instance.baseItemId} (${instance.quantity}x)`);
+            removedCount += instance.quantity;
+            if (!removedItems.includes(instance.baseItemId)) {
+              removedItems.push(instance.baseItemId);
+            }
+            return false;
+          }
+          return true;
+        });
+        
+        if (validInstances.length > 0) {
+          slot.stack.instances = validInstances;
+          slot.stack.totalQuantity = validInstances.reduce((sum, inst) => sum + inst.quantity, 0);
+          validSlots.push(slot);
+        }
+      }
+      
+      group.slots = validSlots;
+      group.totalItems = validSlots.reduce((sum, slot) => sum + slot.stack.totalQuantity, 0);
+      group.totalValue = validSlots.reduce((sum, slot) => {
+        return sum + slot.stack.instances.reduce((instSum, inst) => {
+          const baseItem = getBaseItem(inst.baseItemId);
+          return instSum + (baseItem ? baseItem.baseValue * inst.quantity : 0);
+        }, 0);
+      }, 0);
+    }
+    
+    // Recalculate totals
+    inventory.totalItems = Array.from(inventory.groups.values()).reduce((sum, group) => sum + group.totalItems, 0);
+    inventory.totalValue = Array.from(inventory.groups.values()).reduce((sum, group) => sum + group.totalValue, 0);
+    inventory.usedCapacity = inventory.totalItems; // Simplified: 1 item = 1 capacity unit
+    
+    console.log(`🧹 Inventory cleanup complete: removed ${removedCount} undefined items`);
+    if (removedItems.length > 0) {
+      console.log(`🧹 Removed item types: ${removedItems.join(', ')}`);
+    }
+    
+    return { removedCount, removedItems };
+  }
+  
+  // Clean up legacy storage by removing items not defined in baseItems
+  cleanLegacyStorageUndefinedItems(storage: Record<string, number>): { removedCount: number; removedItems: string[] } {
+    let removedCount = 0;
+    const removedItems: string[] = [];
+    
+    console.log('🧹 Cleaning legacy storage: removing undefined items...');
+    
+    for (const [itemId, quantity] of Object.entries(storage)) {
+      const baseItem = getBaseItem(itemId);
+      if (!baseItem) {
+        console.log(`❌ Removing undefined item from legacy storage: ${itemId} (${quantity}x)`);
+        removedCount += quantity;
+        removedItems.push(itemId);
+        delete storage[itemId];
+      }
+    }
+    
+    console.log(`🧹 Legacy storage cleanup complete: removed ${removedCount} undefined items`);
+    if (removedItems.length > 0) {
+      console.log(`🧹 Removed item types: ${removedItems.join(', ')}`);
+    }
+    
+    return { removedCount, removedItems };
+  }
+  
   // Create empty inventory
   createEmptyInventory(storageCapacity: number = 1000): FacilityInventory {
     const groups = new Map<ItemCategory, InventoryGroup>();

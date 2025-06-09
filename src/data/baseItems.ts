@@ -526,6 +526,94 @@ export const baseItems: Record<string, BaseItem> = {
     stackable: true,
     defaultTags: [],
     manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+  
+  // Missing component definitions for proper assembly support
+  'blade-finished': {
+    id: 'blade-finished',
+    name: 'Finished Blade',
+    category: ItemCategory.COMPONENT,
+    baseValue: 45,
+    description: 'Properly sharpened and finished tactical blade',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'steel'
+  },
+  
+  'knife-handle': {
+    id: 'knife-handle',
+    name: 'Knife Handle',
+    category: ItemCategory.COMPONENT,
+    baseValue: 15,
+    description: 'Ergonomic handle for tactical knife',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'plastic'
+  },
+  
+  'blade-damaged': {
+    id: 'blade-damaged',
+    name: 'Damaged Blade',
+    category: ItemCategory.COMPONENT,
+    baseValue: 8,
+    description: 'Chipped or damaged blade requiring restoration',
+    stackable: true,
+    defaultTags: [ItemTag.DAMAGED],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'steel'
+  },
+  
+  'blade-dull': {
+    id: 'blade-dull',
+    name: 'Dull Blade',
+    category: ItemCategory.COMPONENT,
+    baseValue: 35,
+    description: 'Functional but dull blade needing sharpening',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'steel'
+  },
+  
+  'heavy-barrel': {
+    id: 'heavy-barrel',
+    name: 'Heavy Barrel',
+    category: ItemCategory.COMPONENT,
+    baseValue: 180,
+    description: 'Precision-machined heavy rifle barrel',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'steel'
+  },
+  
+  'rifle-assembly': {
+    id: 'rifle-assembly',
+    name: 'Rifle Assembly',
+    category: ItemCategory.COMPONENT,
+    baseValue: 220,
+    description: 'Complete mechanical assembly for heavy rifle',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'machined_parts', quantity: 15 },
+      { componentId: 'advanced_electronics', quantity: 2 }
+    ]
+  },
+  
+  'composite-stock': {
+    id: 'composite-stock',
+    name: 'Composite Stock',
+    category: ItemCategory.COMPONENT,
+    baseValue: 85,
+    description: 'Lightweight composite rifle stock',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'composite_materials'
   }
 };
 

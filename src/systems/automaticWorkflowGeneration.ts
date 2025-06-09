@@ -537,23 +537,53 @@ export class AutomaticWorkflowGeneration {
     baseItem: BaseItem,
     materialRequirements: MaterialRequirement[]
   ): DynamicOperation {
-    // Estimate material needs based on item condition
-    // For repairs, we need spare parts proportional to damage, not monetary value
-    // A fully damaged item (0% quality) might need 20% of original materials
-    // A slightly damaged item (80% quality) might need 5% of original materials
+    // For repairs, we need replacement components based on actual assembly components
+    // Estimate how many components need replacement based on damage level
     const damagePercentage = (100 - item.quality) / 100;
-    const repairMaterialFactor = 0.2; // Max 20% of original materials for full repair
+    const repairComponentFactor = 0.3; // Up to 30% of components may need replacement
     
-    // Base material need on item type - simple items need 1-2 units for repair
-    const baseMaterialNeed = baseItem.manufacturingType === ItemManufacturingType.ASSEMBLY ? 2 : 1;
-    const materialNeeded = Math.max(1, Math.round(baseMaterialNeed * damagePercentage * repairMaterialFactor * 5));
+    const materialConsumption: Array<{ itemId: string; count: number; tags?: string[] }> = [];
     
-    // Add estimated material requirements
-    materialRequirements.push({
-      material_id: 'low_tech_spares', // Use spare parts instead of raw steel
-      quantity: materialNeeded,
-      consumed_at_start: false
-    });
+    if (baseItem.assemblyComponents && baseItem.assemblyComponents.length > 0) {
+      console.log(`AutomaticWorkflowGeneration: Creating repair operation for ${baseItem.name} using actual components`);
+      
+      for (const component of baseItem.assemblyComponents) {
+        // Calculate how many of this component type might need replacement
+        const componentReplacementChance = Math.min(1.0, damagePercentage + 0.1); // Always at least 10% chance
+        const replacementNeeded = Math.random() < componentReplacementChance ? 1 : 0;
+        
+        if (replacementNeeded > 0) {
+          materialConsumption.push({
+            itemId: component.componentId,
+            count: replacementNeeded * item.quantity,
+            tags: [] // Accept any quality for repair components
+          });
+          
+          // Add to legacy material requirements for compatibility
+          materialRequirements.push({
+            material_id: component.componentId,
+            quantity: replacementNeeded * item.quantity,
+            consumed_at_start: false
+          });
+          
+          console.log(`AutomaticWorkflowGeneration: Repair will need ${replacementNeeded}x ${component.componentId} for replacement`);
+        }
+      }
+    } else {
+      console.warn(`AutomaticWorkflowGeneration: No assembly components found for ${baseItem.name}, using fallback repair materials`);
+      // Fallback - use basic materials
+      materialConsumption.push({
+        itemId: 'steel',
+        count: Math.max(1, Math.round(damagePercentage * 3)),
+        tags: []
+      });
+      
+      materialRequirements.push({
+        material_id: 'steel',
+        quantity: Math.max(1, Math.round(damagePercentage * 3)),
+        consumed_at_start: false
+      });
+    }
 
     return {
       id: `component_repair_${Date.now()}`,
@@ -565,11 +595,7 @@ export class AutomaticWorkflowGeneration {
         minimum: 5
       },
       baseDurationMinutes: 45 * item.quantity,
-      materialConsumption: [{
-        itemId: 'low_tech_spares',
-        count: materialNeeded,
-        tags: []
-      }],
+      materialConsumption,
       can_fail: true,
       failure_chance: 0.15,
       labor_skill: 'skilled_technician',
