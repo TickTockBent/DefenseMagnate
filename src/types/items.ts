@@ -43,6 +43,16 @@ export enum ItemTag {
   TACTICAL = 'tactical',        // Military/tactical configuration
   FIELD_READY = 'field_ready',  // Ready for field deployment
   
+  // Environmental Condition Tags (Manufacturing v2 Phase 3)
+  DRENCHED = 'drenched',        // Water damage - needs drying treatment
+  CORRODED = 'corroded',        // Corrosion damage - needs chemical treatment
+  HEAT_DAMAGED = 'heat_damaged', // Heat damage - needs re-tempering
+  CONTAMINATED = 'contaminated', // Chemical contamination - needs decontamination
+  FROZEN = 'frozen',            // Cold damage - needs careful thawing
+  RADIATION_EXPOSED = 'radiation_exposed', // Radiation damage - needs decontamination
+  IMPACT_DAMAGED = 'impact_damaged', // Physical trauma - structural assessment needed
+  WORN = 'worn',               // General wear - refurbishment needed
+  
   // Special Tags
   PROTOTYPE = 'prototype',       // Experimental items with unique properties
   CUSTOM = 'custom',            // Player-customized items

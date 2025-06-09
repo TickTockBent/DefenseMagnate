@@ -276,6 +276,92 @@ export const baseItems: Record<string, BaseItem> = {
       { componentId: 'plastic-scrap', quantity: 1, requiredTags: [ItemTag.SALVAGED] }
     ]
   },
+
+  // Environmental Condition Test Items - Tier 3: Items with environmental damage
+  drenched_tactical_knife: {
+    id: 'drenched_tactical_knife',
+    name: 'Water-Damaged Tactical Knife',
+    category: ItemCategory.PRODUCT,
+    baseValue: 35,
+    description: 'Tactical knife with severe water damage, needs drying treatment',
+    stackable: false,
+    defaultTags: [ItemTag.DRENCHED],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'blade-finished', quantity: 1 },
+      { componentId: 'knife-handle', quantity: 1 }
+    ]
+  },
+
+  corroded_mechanical_assembly: {
+    id: 'corroded_mechanical_assembly',
+    name: 'Corroded Mechanical Assembly',
+    category: ItemCategory.COMPONENT,
+    baseValue: 25,
+    description: 'Mechanical assembly with heavy corrosion, needs chemical treatment',
+    stackable: true,
+    defaultTags: [ItemTag.CORRODED, ItemTag.ASSEMBLY],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'mechanical-component', quantity: 8, requiredTags: [ItemTag.ROUGH, ItemTag.LOW_TECH] }
+    ]
+  },
+
+  heat_damaged_sidearm: {
+    id: 'heat_damaged_sidearm',
+    name: 'Heat-Damaged Sidearm',
+    category: ItemCategory.PRODUCT,
+    baseValue: 45,
+    description: 'Sidearm exposed to extreme heat, metal structure compromised',
+    stackable: false,
+    defaultTags: [ItemTag.HEAT_DAMAGED],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'mechanical-assembly', quantity: 1, requiredTags: [ItemTag.LOW_TECH] },
+      { componentId: 'small-tube', quantity: 1 },
+      { componentId: 'small-casing', quantity: 1 }
+    ]
+  },
+
+  contaminated_electronics: {
+    id: 'contaminated_electronics',
+    name: 'Contaminated Electronics',
+    category: ItemCategory.COMPONENT,
+    baseValue: 8,
+    description: 'Electronic components with chemical contamination',
+    stackable: true,
+    defaultTags: [ItemTag.CONTAMINATED],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'industrial_chemicals'
+  },
+
+  radiation_exposed_rifle: {
+    id: 'radiation_exposed_rifle',
+    name: 'Radiation-Exposed Rifle',
+    category: ItemCategory.PRODUCT,
+    baseValue: 150,
+    description: 'Heavy rifle contaminated with radioactive material',
+    stackable: false,
+    defaultTags: [ItemTag.RADIATION_EXPOSED],
+    manufacturingType: ItemManufacturingType.ASSEMBLY,
+    assemblyComponents: [
+      { componentId: 'heavy-barrel', quantity: 1 },
+      { componentId: 'rifle-assembly', quantity: 1 },
+      { componentId: 'composite-stock', quantity: 1 }
+    ]
+  },
+
+  impact_damaged_components: {
+    id: 'impact_damaged_components',
+    name: 'Impact-Damaged Components',
+    category: ItemCategory.COMPONENT,
+    baseValue: 12,
+    description: 'Mechanical components with structural damage from impact',
+    stackable: true,
+    defaultTags: [ItemTag.IMPACT_DAMAGED],
+    manufacturingType: ItemManufacturingType.SHAPED_MATERIAL,
+    materialSource: 'steel'
+  },
   
   damaged_tactical_knife: {
     id: 'damaged_tactical_knife',
@@ -326,6 +412,117 @@ export const baseItems: Record<string, BaseItem> = {
     category: ItemCategory.MATERIAL,
     baseValue: 18,
     description: 'Chemical compounds for manufacturing processes',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+
+  // Treatment Materials - Tier 1: Consumables for condition treatments
+  absorbent_materials: {
+    id: 'absorbent_materials',
+    name: 'Absorbent Materials',
+    category: ItemCategory.MATERIAL,
+    baseValue: 5,
+    description: 'Drying cloths and absorbent compounds for moisture removal',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+
+  rust_remover: {
+    id: 'rust_remover',
+    name: 'Rust Remover',
+    category: ItemCategory.MATERIAL,
+    baseValue: 12,
+    description: 'Chemical rust removal compounds and corrosion inhibitors',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+
+  protective_coating: {
+    id: 'protective_coating',
+    name: 'Protective Coating',
+    category: ItemCategory.MATERIAL,
+    baseValue: 8,
+    description: 'Anti-corrosion protective coatings and sealants',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+
+  decontamination_solution: {
+    id: 'decontamination_solution',
+    name: 'Decontamination Solution',
+    category: ItemCategory.MATERIAL,
+    baseValue: 25,
+    description: 'Specialized solutions for chemical decontamination',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+
+  neutralizing_agent: {
+    id: 'neutralizing_agent',
+    name: 'Neutralizing Agent',
+    category: ItemCategory.MATERIAL,
+    baseValue: 15,
+    description: 'Chemical neutralization compounds for contaminant treatment',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+
+  thermal_protection: {
+    id: 'thermal_protection',
+    name: 'Thermal Protection',
+    category: ItemCategory.MATERIAL,
+    baseValue: 10,
+    description: 'Thermal shock prevention materials and insulators',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+
+  tempering_compounds: {
+    id: 'tempering_compounds',
+    name: 'Tempering Compounds',
+    category: ItemCategory.MATERIAL,
+    baseValue: 20,
+    description: 'Heat treatment materials for metal tempering and repair',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+
+  lubricants: {
+    id: 'lubricants',
+    name: 'Precision Lubricants',
+    category: ItemCategory.MATERIAL,
+    baseValue: 8,
+    description: 'High-quality lubricants and cleaners for mechanical parts',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+
+  replacement_parts: {
+    id: 'replacement_parts',
+    name: 'Small Replacement Parts',
+    category: ItemCategory.MATERIAL,
+    baseValue: 15,
+    description: 'Assorted small mechanical parts for repairs and maintenance',
+    stackable: true,
+    defaultTags: [],
+    manufacturingType: ItemManufacturingType.RAW_MATERIAL
+  },
+
+  cleaning_supplies: {
+    id: 'cleaning_supplies',
+    name: 'Cleaning Supplies',
+    category: ItemCategory.MATERIAL,
+    baseValue: 6,
+    description: 'General cleaning compounds and solvents',
     stackable: true,
     defaultTags: [],
     manufacturingType: ItemManufacturingType.RAW_MATERIAL

@@ -237,6 +237,70 @@ export class ConditionTreatmentPlanner {
         }
       ],
       laborSkill: 'skilled_technician'
+    }],
+
+    [EnvironmentalCondition.RADIATION_EXPOSED, {
+      id: 'treatment_radiation_decontamination',
+      name: 'Radiation Decontamination',
+      description: 'Remove radioactive contamination and assess radiation damage',
+      targetCondition: EnvironmentalCondition.RADIATION_EXPOSED,
+      requiredEquipment: [TagCategory.BASIC_MANIPULATION, TagCategory.MEASURING],
+      estimatedTime: 120,
+      materialRequirements: [
+        { materialId: 'decontamination_solution', quantity: 4, description: 'Radiation-specific decontamination compounds' },
+        { materialId: 'protective_coating', quantity: 2, description: 'Radiation-resistant protective coating' }
+      ],
+      successProbability: 0.75,
+      qualityImprovement: 18,
+      riskFactors: [
+        {
+          description: 'Residual radiation may cause ongoing degradation',
+          probability: 0.2,
+          impact: 'quality_reduction',
+          severity: 'high',
+          mitigation: 'Multiple decontamination cycles'
+        },
+        {
+          description: 'Radiation exposure risk to technician',
+          probability: 0.05,
+          impact: 'time_increase',
+          severity: 'medium',
+          mitigation: 'Proper safety protocols and protective equipment'
+        }
+      ],
+      laborSkill: 'specialist'
+    }],
+
+    [EnvironmentalCondition.IMPACT_DAMAGED, {
+      id: 'treatment_structural_repair',
+      name: 'Structural Impact Repair',
+      description: 'Assess and repair structural damage from physical trauma',
+      targetCondition: EnvironmentalCondition.IMPACT_DAMAGED,
+      requiredEquipment: [TagCategory.PRECISION_MANIPULATION, TagCategory.MEASURING, TagCategory.BASIC_MANIPULATION],
+      estimatedTime: 80,
+      materialRequirements: [
+        { materialId: 'replacement_parts', quantity: 3, description: 'Structural replacement components' },
+        { materialId: 'protective_coating', quantity: 1, description: 'Stress-resistant protective coating' }
+      ],
+      successProbability: 0.8,
+      qualityImprovement: 25,
+      riskFactors: [
+        {
+          description: 'Hidden stress fractures may remain',
+          probability: 0.15,
+          impact: 'component_loss',
+          severity: 'medium',
+          mitigation: 'Thorough structural analysis'
+        },
+        {
+          description: 'Repair may not restore original strength',
+          probability: 0.1,
+          impact: 'quality_reduction',
+          severity: 'low',
+          mitigation: 'Conservative quality assessment'
+        }
+      ],
+      laborSkill: 'skilled_technician'
     }]
   ]);
 
@@ -368,31 +432,41 @@ export class ConditionTreatmentPlanner {
   private static detectEnvironmentalConditions(item: ItemInstance): EnvironmentalCondition[] {
     const conditions: EnvironmentalCondition[] = [];
     
-    // This would be expanded to detect actual environmental condition tags
-    // For now, detect based on existing tags and quality
-    
-    if (item.tags.some(tag => ['drenched', 'wet', 'waterlogged'].includes(tag))) {
+    // Detect environmental conditions using proper ItemTag enum values
+    if (item.tags.includes(ItemTag.DRENCHED)) {
       conditions.push(EnvironmentalCondition.DRENCHED);
     }
     
-    if (item.tags.some(tag => ['corroded', 'rusted', 'oxidized'].includes(tag))) {
+    if (item.tags.includes(ItemTag.CORRODED)) {
       conditions.push(EnvironmentalCondition.CORRODED);
     }
     
-    if (item.tags.some(tag => ['heat_damaged', 'overheated', 'burned'].includes(tag))) {
+    if (item.tags.includes(ItemTag.HEAT_DAMAGED)) {
       conditions.push(EnvironmentalCondition.HEAT_DAMAGED);
     }
     
-    if (item.tags.some(tag => ['contaminated', 'polluted', 'toxic'].includes(tag))) {
+    if (item.tags.includes(ItemTag.CONTAMINATED)) {
       conditions.push(EnvironmentalCondition.CONTAMINATED);
     }
     
-    if (item.tags.some(tag => ['frozen', 'ice_damaged', 'frost_damaged'].includes(tag))) {
+    if (item.tags.includes(ItemTag.FROZEN)) {
       conditions.push(EnvironmentalCondition.FROZEN);
     }
     
-    // General wear detection
-    if (item.quality < 60 && !item.tags.includes(ItemTag.DAMAGED)) {
+    if (item.tags.includes(ItemTag.RADIATION_EXPOSED)) {
+      conditions.push(EnvironmentalCondition.RADIATION_EXPOSED);
+    }
+    
+    if (item.tags.includes(ItemTag.IMPACT_DAMAGED)) {
+      conditions.push(EnvironmentalCondition.IMPACT_DAMAGED);
+    }
+    
+    if (item.tags.includes(ItemTag.WORN)) {
+      conditions.push(EnvironmentalCondition.WORN);
+    }
+    
+    // Auto-detect general wear for low quality items without damage tags
+    if (item.quality < 60 && !item.tags.includes(ItemTag.DAMAGED) && !conditions.includes(EnvironmentalCondition.WORN)) {
       conditions.push(EnvironmentalCondition.WORN);
     }
     
