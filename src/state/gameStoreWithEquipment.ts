@@ -1189,7 +1189,27 @@ const initialMaterials = {
   // Additional useful materials
   aluminum: 2,
   basic_electronics: 3,
-  machined_parts: 5
+  machined_parts: 5,
+  
+  // Environmental condition test items for treatment system testing
+  drenched_tactical_knife: 2,
+  corroded_mechanical_assembly: 3,
+  heat_damaged_sidearm: 2,
+  contaminated_electronics: 4,
+  radiation_exposed_rifle: 1,
+  impact_damaged_components: 5,
+  
+  // Treatment materials for environmental condition handling
+  absorbent_materials: 10,
+  rust_remover: 8,
+  decontamination_solution: 6,
+  neutralizing_agent: 5,
+  thermal_protection: 4,
+  tempering_compounds: 3,
+  protective_coating: 6,
+  lubricants: 8,
+  replacement_parts: 12,
+  cleaning_supplies: 15
 };
 
 // Sync facility storage with game store materials
