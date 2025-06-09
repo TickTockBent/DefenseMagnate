@@ -11,6 +11,7 @@ import { getDisplayName, getQualityDescription } from '../utils/itemSystem';
 import { baseItems, getBaseItem } from '../data/baseItems';
 import { EnhancementManager } from '../systems/enhancementManager';
 import { EnhancementCalculator } from '../systems/enhancementCalculator';
+import { globalJobStateManager, JobReadinessState } from '../systems/jobStateManager';
 
 // Helper function to format product names for display
 function formatProductName(productId: string): string {
@@ -434,12 +435,16 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
     };
   };
   
-  // Collect all jobs: active (from machines), queued, and recently completed
+  // Collect all jobs: active (from machines), ready/blocked (from job state manager), and recently completed
   const activeJobs = Array.from(workspace.machines.values())
     .map(slot => slot.currentJob)
     .filter((job): job is MachineSlotJob => job !== null && job !== undefined);
   
-  const queuedJobs = workspace.jobQueue || [];
+  // Get jobs from the new event-driven job state manager
+  const readyJobs = globalJobStateManager.getReadyJobs();
+  const blockedJobs = globalJobStateManager.getBlockedJobs();
+  
+  const queuedJobs = [...readyJobs, ...blockedJobs];
   
   // Filter completed jobs that are less than 5 seconds old (using game time)
   const currentGameTime = gameTime.totalGameHours;

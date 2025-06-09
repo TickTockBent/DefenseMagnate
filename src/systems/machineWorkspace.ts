@@ -23,6 +23,8 @@ import { inventoryManager } from '../utils/inventoryManager';
 import { createItemInstance } from '../utils/itemSystem';
 import { getBaseItem } from '../data/baseItems';
 import { ManufacturingV2Integration } from './manufacturingV2Integration';
+import { globalEventBus, EventType, EventUtils } from './eventBus';
+import { globalJobStateManager, JobReadinessState } from './jobStateManager';
 
 export class MachineWorkspaceManager {
   private workspaces: Map<string, MachineWorkspace> = new Map();
@@ -32,6 +34,35 @@ export class MachineWorkspaceManager {
   
   constructor(equipmentDatabase: Map<string, Equipment>) {
     this.equipmentDefinitions = equipmentDatabase;
+    
+    // Set up event-driven job assignment
+    this.initializeEventHandlers();
+  }
+  
+  // Initialize event handlers for event-driven architecture
+  private initializeEventHandlers(): void {
+    // When machines become available, try to assign ready jobs
+    globalEventBus.subscribe(EventType.MACHINE_AVAILABLE, this.onMachineAvailable.bind(this));
+    
+    // When operations complete, check for dependent operations
+    globalEventBus.subscribe(EventType.OPERATION_COMPLETED, this.onOperationCompleted.bind(this));
+  }
+  
+  // Event handler: Machine became available
+  private onMachineAvailable(event: any): void {
+    const { facilityId, machineId, capabilities } = event.data;
+    console.log(`🎯 EVENT: Machine ${machineId} available in facility ${facilityId}`);
+    
+    // Try to assign ready jobs to this machine
+    this.assignReadyJobsToAvailableMachine(facilityId, machineId);
+  }
+  
+  // Event handler: Operation completed
+  private onOperationCompleted(event: any): void {
+    const { jobId, operationIndex, facilityId } = event.data;
+    console.log(`🎯 EVENT: Operation ${operationIndex} completed for job ${jobId}`);
+    
+    // This might make other operations ready - job state manager handles this
   }
   
   // Update game time reference
@@ -96,6 +127,11 @@ export class MachineWorkspaceManager {
         };
         workspace.machines.set(equipment.id, slot);
         console.log(`Created machine slot for ${def.name} (${equipment.id})`);
+        
+        // Emit machine available event for initial job assignment
+        const capabilities = def.tags.map(t => t.category);
+        const machineEventEmitter = EventUtils.createMachineEventEmitter(equipment.id, facility.id);
+        machineEventEmitter.becameAvailable(capabilities);
       }
     }
     
@@ -230,13 +266,13 @@ export class MachineWorkspaceManager {
     // Move required materials from facility to job inventory
     this.moveJobMaterials(job, facility);
     
-    // Add to facility queue and sort by priority
-    this.addJobToQueue(workspace, job);
-    
-    console.log(`Job ${job.id} added to facility queue for ${job.method.operations[0]?.name}`);
-    
     // Initialize sub-operations for all jobs
     this.initializeSubOperations(job, facility);
+    
+    // Add to event-driven job state manager instead of workspace queue
+    globalJobStateManager.addJob(job);
+    
+    console.log(`Job ${job.id} added to job state manager for ${job.method.operations[0]?.name}`);
     
     return job;
   }
@@ -722,12 +758,12 @@ export class MachineWorkspaceManager {
     }
   }
   
-  // Update a single workspace
+  // Update a single workspace - EVENT-DRIVEN VERSION (no polling)
   private updateWorkspace(workspace: MachineWorkspace, deltaTime: number): void {
     const facility = this.getFacility(workspace.facilityId);
     if (!facility) return;
     
-    // Step 1: Process machines that are currently working
+    // Only process machines that are currently working - no job assignment polling
     for (const [equipmentId, machine] of workspace.machines) {
       if (machine.currentJob && machine.currentProgress) {
         // Update lastUpdateTime for real-time interpolation
@@ -744,26 +780,129 @@ export class MachineWorkspaceManager {
       }
     }
     
-    // Step 2: Try to assign jobs from facility queue to idle machines
-    this.assignJobsFromQueue(workspace, facility);
+    // Job assignment is now event-driven - happens when machines become available
+    // No more polling for jobs!
   }
   
-  // Assign jobs from facility queue to available machines
-  private assignJobsFromQueue(workspace: MachineWorkspace, facility: Facility): void {
-    // Find idle machines
-    const idleMachines = Array.from(workspace.machines.values()).filter(machine => !machine.currentJob);
+  // EVENT-DRIVEN: Assign ready jobs to a specific available machine
+  private assignReadyJobsToAvailableMachine(facilityId: string, machineId: string): void {
+    const workspace = this.workspaces.get(facilityId);
+    const facility = this.getFacility(facilityId);
     
-    if (idleMachines.length === 0) return; // No idle machines
+    if (!workspace || !facility) {
+      console.warn(`Cannot assign jobs: workspace or facility not found for ${facilityId}`);
+      return;
+    }
     
-    // Assign ready sub-operations from all jobs
-    this.assignSubOperations(workspace, facility, idleMachines);
+    // Get the specific machine
+    const machine = workspace.machines.get(machineId);
+    if (!machine || machine.currentJob) {
+      // Machine not found or already occupied
+      return;
+    }
     
-    // All jobs now use sub-operations - no legacy queue assignment needed
+    console.log(`🎯 Attempting to assign ready job to machine ${machineId}`);
+    
+    // Get ready jobs from job state manager (no more polling!)
+    const readyJobs = globalJobStateManager.getReadyJobs();
+    
+    for (const job of readyJobs) {
+      if (job.facilityId !== facilityId) continue; // Wrong facility
+      
+      // Check if this job has ready sub-operations that can use this machine
+      if (this.tryAssignJobToMachine(job, machine, facility)) {
+        console.log(`✅ Successfully assigned job ${job.id} to machine ${machineId}`);
+        break; // Machine is now occupied
+      }
+    }
   }
   
-  // MANUFACTURING V2: Assign ready sub-operations to idle machines
+  // Try to assign a specific job to a specific machine
+  private tryAssignJobToMachine(job: MachineSlotJob, machine: MachineSlot, facility: Facility): boolean {
+    if (!job.subOperations) return false;
+    
+    // Find a ready sub-operation that can use this machine
+    for (const [index, subOp] of job.subOperations) {
+      if (subOp.state !== 'queued') continue;
+      
+      // Check if this machine can handle this operation
+      const equipment = facility.equipment.find(e => e.id === machine.machineId);
+      if (!equipment) continue;
+      
+      const def = this.equipmentDefinitions.get(equipment.equipmentId);
+      if (!def) continue;
+      
+      // Check if machine provides required capabilities
+      const canHandle = def.tags.some(tag => {
+        if (tag.category !== subOp.operation.requiredTag.category) return false;
+        
+        if (typeof subOp.operation.requiredTag.minimum === 'boolean') {
+          return tag.value === true;
+        } else {
+          return typeof tag.value === 'number' && tag.value >= subOp.operation.requiredTag.minimum;
+        }
+      });
+      
+      if (canHandle && this.canStartSubOperation(job, subOp, facility)) {
+        // Assign this sub-operation to the machine
+        this.startSubOperationOnMachine(job, subOp, machine, facility);
+        
+        // Mark job as started in job state manager
+        globalJobStateManager.markJobStarted(job.id);
+        
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  // Create a sub-operation job for machine assignment
+  private startSubOperationOnMachine(parentJob: MachineSlotJob, subOp: JobSubOperation, machine: MachineSlot, facility: Facility): void {
+    // Create a temporary job for this sub-operation
+    const subOpJob: MachineSlotJob = {
+      id: subOp.id,
+      facilityId: parentJob.facilityId,
+      productId: parentJob.productId,
+      method: {
+        id: `subop_${subOp.operationIndex}`,
+        name: subOp.operation.name,
+        description: subOp.operation.description,
+        operations: [subOp.operation],
+        outputTags: [],
+        qualityRange: [50, 100],
+        output_state: 'functional',
+        output_quality_range: [50, 100],
+        labor_cost_multiplier: 1.0,
+        complexity_rating: 1,
+        profit_margin_modifier: 1.0,
+        customer_appeal: []
+      },
+      quantity: parentJob.quantity,
+      priority: parentJob.priority,
+      rushOrder: parentJob.rushOrder,
+      createdAt: parentJob.createdAt,
+      state: 'in_progress',
+      currentOperationIndex: 0,
+      completedOperations: [],
+      jobInventory: parentJob.jobInventory, // Share inventory with parent
+      operationProducts: parentJob.operationProducts, // Share products with parent
+      subOperations: new Map() // Sub-operations don't have their own sub-operations
+    };
+    
+    // Start the sub-operation on the machine
+    this.startJobOnMachine(subOpJob, machine, facility);
+    
+    // Update sub-operation state
+    subOp.state = 'in_progress';
+    subOp.startedAt = this.currentGameTime.totalGameHours;
+    
+    console.log(`Started sub-operation ${subOp.operation.name} on machine ${machine.machineId}`);
+  }
+  
+  // LEGACY: This method is now replaced by event-driven assignment
   private assignSubOperations(workspace: MachineWorkspace, facility: Facility, idleMachines: MachineSlot[]): void {
-    console.log(`Manufacturing v2: Assigning sub-operations with ${idleMachines.length} idle machines`);
+    console.warn('⚠️  assignSubOperations called but this is now event-driven! This should not happen.');
     
     // Go through all jobs in the queue (including active ones)
     const allJobs = [
@@ -1218,6 +1357,22 @@ export class MachineWorkspaceManager {
     // Clear machine
     machine.currentJob = undefined;
     machine.currentProgress = undefined;
+    
+    // EMIT EVENTS: Operation completed and machine available
+    globalEventBus.emit(EventType.OPERATION_COMPLETED, {
+      jobId: parentJob.id,
+      operationIndex: subOpIndex,
+      facilityId: facility.id,
+      machineId: machine.machineId,
+      outputs: job.operationProducts.get(subOpIndex) || []
+    });
+    
+    // Emit machine available event to trigger job assignment
+    const machineEventEmitter = EventUtils.createMachineEventEmitter(machine.machineId, facility.id);
+    const equipment = facility.equipment.find(e => e.id === machine.machineId);
+    const equipmentDef = equipment ? this.equipmentDefinitions.get(equipment.equipmentId) : undefined;
+    const capabilities = equipmentDef ? equipmentDef.tags.map(t => t.category) : [];
+    machineEventEmitter.becameAvailable(capabilities);
     
     // Check if parent job is complete
     this.checkParentJobCompletion(workspace, parentJob, facility);

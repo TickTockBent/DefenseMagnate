@@ -474,40 +474,45 @@ export class AutomaticWorkflowGeneration {
   }
 
   private static createReassemblyOperation(item: ItemInstance, baseItem: BaseItem): DynamicOperation {
-    // For assembly operations, we need the constituent components
-    // TODO: This should be dynamic based on the actual item definition
-    // For now, we'll use the basic sidearm component structure
+    // Use recipe-based approach: read required components from baseItem.assemblyComponents
+    const materialConsumption = [];
+    
+    if (baseItem.assemblyComponents && baseItem.assemblyComponents.length > 0) {
+      console.log(`AutomaticWorkflowGeneration: Using recipe-based assembly for ${baseItem.name}`);
+      console.log(`AutomaticWorkflowGeneration: Requires ${baseItem.assemblyComponents.length} component types`);
+      
+      for (const component of baseItem.assemblyComponents) {
+        materialConsumption.push({
+          itemId: component.componentId,
+          count: component.quantity * item.quantity,
+          tags: [], // No damaged components allowed for final assembly
+          requiredTags: component.requiredTags || [], // Use component's required tags if specified
+          maxQuality: undefined // No upper limit, but system should filter out damaged items
+        });
+        
+        console.log(`AutomaticWorkflowGeneration: Final assembly requires ${component.quantity * item.quantity}x ${component.componentId}`);
+      }
+    } else {
+      console.warn(`AutomaticWorkflowGeneration: No assemblyComponents found for ${baseItem.name}, assembly may fail`);
+      // Fallback - create generic material requirement
+      materialConsumption.push({
+        itemId: 'generic-components',
+        count: 3 * item.quantity,
+        tags: []
+      });
+    }
     
     return {
       id: `reassemble_${Date.now()}`,
       name: 'Final Assembly',
-      description: 'Reassemble all components into complete item',
+      description: `Reassemble all components into complete ${baseItem.name}`,
       operationType: OperationType.ASSEMBLY,
       requiredTag: {
         category: TagCategory.BASIC_MANIPULATION,
         minimum: 3
       },
       baseDurationMinutes: 35 * item.quantity,
-      materialConsumption: [
-        {
-          itemId: 'mechanical_assembly',
-          count: 1 * item.quantity,
-          tags: [], // No damaged components allowed (will be filtered by quality)
-          maxQuality: undefined // No upper limit, but system should filter by minQuality
-        },
-        {
-          itemId: 'small_tube',
-          count: 1 * item.quantity,
-          tags: [], // No damaged components allowed
-          maxQuality: undefined
-        },
-        {
-          itemId: 'small_casing',
-          count: 1 * item.quantity,
-          tags: [], // No damaged components allowed
-          maxQuality: undefined
-        }
-      ],
+      materialConsumption,
       materialProduction: [{
         itemId: baseItem.id,
         count: item.quantity,
@@ -631,37 +636,53 @@ export class AutomaticWorkflowGeneration {
     baseItem: BaseItem, 
     qualityRetention: number
   ): Array<{ itemId: string; count: number; tags?: ItemTag[]; quality?: number }> {
-    // This would ideally read the assembly definition from baseItem.assemblyComponents
-    // For now, generate plausible components based on item type
-    
     const outputs: Array<{ itemId: string; count: number; tags?: ItemTag[]; quality?: number }> = [];
     
-    if (baseItem.id === 'basic_sidearm') {
-      outputs.push(
-        {
-          itemId: 'mechanical_assembly',
-          count: item.quantity,
-          tags: item.tags.includes(ItemTag.DAMAGED) ? [ItemTag.DAMAGED] : [],
-          quality: Math.round(item.quality * qualityRetention)
-        },
-        {
-          itemId: 'small_tube',
-          count: item.quantity,
-          quality: Math.round(item.quality * qualityRetention * 1.1) // Tubes are usually more durable
-        },
-        {
-          itemId: 'small_casing',
-          count: item.quantity,
-          tags: item.tags.includes(ItemTag.DAMAGED) ? [ItemTag.DAMAGED] : [],
-          quality: Math.round(item.quality * qualityRetention * 0.9) // Casings are more fragile
+    // Use recipe-based approach: read assemblyComponents from baseItem
+    if (baseItem.assemblyComponents && baseItem.assemblyComponents.length > 0) {
+      console.log(`AutomaticWorkflowGeneration: Using recipe-based disassembly for ${baseItem.name}`);
+      console.log(`AutomaticWorkflowGeneration: Found ${baseItem.assemblyComponents.length} components in recipe`);
+      
+      for (const component of baseItem.assemblyComponents) {
+        // Calculate component quality based on original item quality and component durability
+        let componentQuality = Math.round(item.quality * qualityRetention);
+        
+        // Apply component-specific quality modifiers
+        if (component.componentId.includes('tube')) {
+          componentQuality = Math.round(componentQuality * 1.1); // Tubes are more durable
+        } else if (component.componentId.includes('casing')) {
+          componentQuality = Math.round(componentQuality * 0.9); // Casings are more fragile
         }
-      );
+        
+        // Ensure quality stays within bounds
+        componentQuality = Math.max(1, Math.min(100, componentQuality));
+        
+        // Inherit damage from original item, plus component-specific damage logic
+        const componentTags = [];
+        if (item.tags.includes(ItemTag.DAMAGED)) {
+          // Some components might be more or less likely to be damaged
+          const damageChance = component.componentId.includes('casing') ? 0.9 : 0.7; // Casings break more easily
+          if (Math.random() < damageChance) {
+            componentTags.push(ItemTag.DAMAGED);
+          }
+        }
+        
+        outputs.push({
+          itemId: component.componentId,
+          count: component.quantity * item.quantity,
+          tags: componentTags,
+          quality: componentQuality
+        });
+        
+        console.log(`AutomaticWorkflowGeneration: Will produce ${component.quantity * item.quantity}x ${component.componentId} at ${componentQuality}% quality`);
+      }
     } else {
-      // Generic assembly breakdown
+      // Fallback for items without assembly definitions
+      console.warn(`AutomaticWorkflowGeneration: No assemblyComponents found for ${baseItem.name}, using generic breakdown`);
       outputs.push({
-        itemId: 'mechanical_components',
-        count: item.quantity * 3, // Assume 3 components per assembly
-        quality: Math.round(item.quality * qualityRetention)
+        itemId: 'scrap-materials',
+        count: item.quantity * 2, // Generic scrap materials
+        quality: Math.round(item.quality * qualityRetention * 0.5) // Much lower quality for unknown disassembly
       });
     }
     
