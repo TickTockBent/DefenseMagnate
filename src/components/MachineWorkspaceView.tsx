@@ -668,7 +668,7 @@ function UnifiedJobList({ workspace, facility, equipmentDatabase }: UnifiedJobLi
                                 
                                 if (activeOp) {
                                   const [index, subOp] = activeOp;
-                                  const equipment = facility?.equipment.find(e => e.id === subOp.assignedMachine);
+                                  const equipment = facility?.equipment.find(e => e.id === subOp.assignedMachineId);
                                   const equipmentDef = equipment ? equipmentDatabase.get(equipment.equipmentId) : null;
                                   
                                   return (
@@ -839,21 +839,24 @@ function UnifiedJobList({ workspace, facility, equipmentDatabase }: UnifiedJobLi
                                     'completed': '✓',
                                     'in_progress': '◐',
                                     'queued': '●',
-                                    'pending': '○'
+                                    'pending': '○',
+                                    'failed': '✗'
                                   }[subOp.state] || '○';
                                   
                                   const statusColor = {
                                     'completed': 'text-green-400',
                                     'in_progress': 'text-yellow-400',
                                     'queued': 'text-blue-400',
-                                    'pending': 'text-gray-400'
+                                    'pending': 'text-gray-400',
+                                    'failed': 'text-red-400'
                                   }[subOp.state] || 'text-gray-400';
                                   
                                   const bgColor = {
                                     'completed': 'bg-green-900',
                                     'in_progress': 'bg-yellow-900',
                                     'queued': 'bg-blue-900',
-                                    'pending': 'bg-gray-900'
+                                    'pending': 'bg-gray-900',
+                                    'failed': 'bg-red-900'
                                   }[subOp.state] || 'bg-gray-900';
                                   
                                   return (
@@ -876,12 +879,12 @@ function UnifiedJobList({ workspace, facility, equipmentDatabase }: UnifiedJobLi
                                       {/* Operation Details */}
                                       <div className="ml-4 mt-1 space-y-1">
                                         {/* Machine Assignment */}
-                                        {subOp.assignedMachine && (
+                                        {subOp.assignedMachineId && (
                                           <div className="text-xs text-teal-300">
                                             🔧 Machine: {(() => {
-                                              const equipment = facility?.equipment.find(e => e.id === subOp.assignedMachine);
+                                              const equipment = facility?.equipment.find(e => e.id === subOp.assignedMachineId);
                                               const equipmentDef = equipment ? equipmentDatabase.get(equipment.equipmentId) : null;
-                                              return equipmentDef?.name || subOp.assignedMachine;
+                                              return equipmentDef?.name || subOp.assignedMachineId;
                                             })()}
                                           </div>
                                         )}
@@ -914,10 +917,12 @@ function UnifiedJobList({ workspace, facility, equipmentDatabase }: UnifiedJobLi
                                         )}
                                         
                                         {/* Progress for in-progress operations */}
-                                        {subOp.state === 'in_progress' && subOp.startTime && (
+                                        {subOp.state === 'in_progress' && subOp.startedAt && (
                                           <div className="text-xs text-yellow-300">
                                             ⏱️ Started: {formatGameTime({
-                                              totalGameHours: subOp.startTime,
+                                              totalGameHours: subOp.startedAt,
+                                              days: Math.floor(subOp.startedAt / 24),
+                                              hours: subOp.startedAt % 24,
                                               isPaused: false,
                                               gameSpeed: 1
                                             })}
@@ -952,7 +957,7 @@ function UnifiedJobList({ workspace, facility, equipmentDatabase }: UnifiedJobLi
                                           </span>
                                         </div>
                                         <div className="text-xs text-gray-400">
-                                          ~{op.duration_minutes || 0}min
+                                          ~{op.baseDurationMinutes || 0}min
                                         </div>
                                       </div>
                                       

@@ -1,12 +1,14 @@
-import { useGameStore } from '../state/gameStore'
+import { useGameStore } from '../state/gameStoreWithEquipment' // UPDATED: Using current store
 
-type Tab = 'research' | 'manufacturing' | 'contracts' | 'supply'
+type Tab = 'research' | 'manufacturing' | 'catalog' | 'equipment' | 'market' | 'contracts'
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'research', label: 'R&D' },
-  { id: 'manufacturing', label: 'Manufacturing' },
+  { id: 'manufacturing', label: 'Workshop' },
+  { id: 'catalog', label: 'Catalog' },
+  { id: 'equipment', label: 'Equipment' },
+  { id: 'market', label: 'Market' },
   { id: 'contracts', label: 'Contracts' },
-  { id: 'supply', label: 'Supply Lines' },
 ]
 
 export function TabPanel() {

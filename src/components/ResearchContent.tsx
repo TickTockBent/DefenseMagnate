@@ -1,4 +1,4 @@
-import { useGameStore } from '../state/gameStore'
+import { useGameStore } from '../state/gameStoreWithEquipment' // UPDATED: Using current store
 
 export function ResearchContent() {
   const research = useGameStore((state) => state.research)

@@ -4,6 +4,7 @@
 import { globalEventBus, EventType, EventUtils } from './eventBus';
 import { globalJobStateManager, JobReadinessState } from './jobStateManager';
 import type { MachineSlotJob, Facility, Equipment, MachineSlot } from '../types';
+import { JobPriority } from '../constants/enums';
 
 // Assignment decision data
 interface AssignmentCandidate {
@@ -317,9 +318,11 @@ export class JobAssignmentCoordinator {
     if (!job) return 0;
     
     const priorityMap = {
-      'high': 100,
-      'normal': 50,
-      'low': 10
+      [JobPriority.CRITICAL]: 200,
+      [JobPriority.RUSH]: 150,
+      [JobPriority.HIGH]: 100,
+      [JobPriority.NORMAL]: 50,
+      [JobPriority.LOW]: 10
     };
     
     const basePriority = priorityMap[job.priority] || 50;

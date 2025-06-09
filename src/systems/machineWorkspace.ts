@@ -15,8 +15,8 @@ import {
   JobPriority,
   ItemInstance,
   ItemTag,
-  ItemManufacturingType,
-  OperationType
+  ItemManufacturingType
+  // OperationType // LEGACY: Not used in MachineOperation, only in DynamicOperation
 } from '../types'; // Using barrel exports
 import { TIME_SCALE, type GameTime } from '../utils/gameClock';
 import { inventoryManager } from '../utils/inventoryManager';
@@ -383,7 +383,8 @@ export class MachineWorkspaceManager {
         );
       } else {
         // For assembly operations, exclude damaged items (require functional components)
-        if (operation.operationType === OperationType.ASSEMBLY) {
+        // Check operation name since MachineOperation doesn't have operationType
+        if (operation.name.toLowerCase().includes('assembl')) {
           // Get all items of this type
           const allItems = inventoryManager.getAllItems(job.jobInventory)
             .filter(item => item.baseItemId === consumption.itemId);
@@ -1013,7 +1014,8 @@ export class MachineWorkspaceManager {
         );
       } else {
         // For assembly operations, exclude damaged items (require functional components)
-        if (subOp.operation.operationType === OperationType.ASSEMBLY) {
+        // Check operation name since MachineOperation doesn't have operationType
+        if (subOp.operation.name.toLowerCase().includes('assembl')) {
           // Get all items and filter out damaged ones
           const allItems = inventoryManager.getAllItems(job.jobInventory)
             .filter(item => item.baseItemId === consumption.itemId && !item.tags.includes(ItemTag.DAMAGED))

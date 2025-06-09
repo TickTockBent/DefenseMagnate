@@ -416,7 +416,7 @@ export class AutomaticWorkflowGeneration {
       },
       baseDurationMinutes: 15 * item.quantity, // More thorough than simple analysis
       // Assessment consumes extracted components and produces assessed components
-      materialConsumption: materialConsumption,
+      materialConsumption: materialConsumption as any, // TODO: Fix type mismatch with tags
       materialProduction: this.generateDiscoveredComponents(syntheticItemForAssessment, baseItem, 0.8),
       can_fail: false,
       failure_chance: 0,
@@ -624,8 +624,8 @@ export class AutomaticWorkflowGeneration {
         minimum: 5
       },
       baseDurationMinutes: 45 * item.quantity,
-      materialConsumption,
-      materialProduction, // THIS WAS MISSING! Components must be produced back to job inventory
+      materialConsumption: materialConsumption as any, // TODO: Fix type mismatch with tags
+      materialProduction: materialProduction as any, // TODO: Fix type mismatch with tags
       can_fail: true,
       failure_chance: 0.15,
       labor_skill: 'skilled_technician',

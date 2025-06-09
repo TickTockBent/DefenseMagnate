@@ -192,6 +192,7 @@ interface GameState {
   removeItemFromInventory: (facilityId: string, itemInstanceId: string, quantity?: number) => boolean;
   getAvailableItems: (facilityId: string, baseItemId: string) => number;
   findBestQualityItems: (facilityId: string, baseItemId: string, quantity: number) => ItemInstance[];
+  cleanupUndefinedItems: () => void;
 }
 
 // Helper to create initial equipment instances
@@ -1263,8 +1264,7 @@ const initialMaterials = {
   tempering_compounds: 3,
   protective_coating: 6,
   lubricants: 8,
-  replacement_parts: 12,
-  cleaning_supplies: 15
+  replacement_parts: 12
 };
 
 // Sync facility storage with game store materials

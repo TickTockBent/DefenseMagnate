@@ -3,6 +3,7 @@
 
 import { globalEventBus, EventType, EventUtils } from './eventBus';
 import type { MachineSlotJob } from '../types';
+import { JobPriority } from '../constants/enums';
 
 // Job readiness states for efficient queue management
 export enum JobReadinessState {
@@ -323,9 +324,11 @@ export class JobStateManager {
   private getJobPriority(job: MachineSlotJob): number {
     // Higher number = higher priority
     const priorityMap = {
-      'high': 100,
-      'normal': 50,
-      'low': 10
+      [JobPriority.CRITICAL]: 200,
+      [JobPriority.RUSH]: 150,
+      [JobPriority.HIGH]: 100,
+      [JobPriority.NORMAL]: 50,
+      [JobPriority.LOW]: 10
     };
     
     const basePriority = priorityMap[job.priority] || 50;
