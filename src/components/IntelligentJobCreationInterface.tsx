@@ -648,7 +648,7 @@ function WorkflowPreviewPanel({
       <div className="border border-gray-700 bg-gray-800 p-4">
         <h5 className="text-gray-400 font-bold mb-3">Operations:</h5>
         <div className="space-y-2">
-          {workflow.operations.map((op, idx) => (
+          {workflow.requiredOperations.map((op: any, idx: number) => (
             <div key={op.id} className="flex items-start space-x-3 text-xs">
               <div className="text-teal-400 font-mono w-6">{idx + 1}.</div>
               <div className="flex-1">

@@ -18,7 +18,7 @@ export class ManufacturingV2Integration {
    * Convert a Manufacturing v2 plan into a MachineBasedMethod
    * This integrates the new dynamic system with existing job infrastructure
    */
-  static convertPlanToMethod(plan: ManufacturingPlan): MachineBasedMethod {
+  static convertPlanToMethod(plan: ManufacturingPlan | import('../systems/automaticWorkflowGeneration').GeneratedWorkflow): MachineBasedMethod {
     console.log(`ManufacturingV2Integration: Converting plan for ${plan.targetProduct} with ${plan.requiredOperations.length} operations`);
     
     const operations = plan.requiredOperations.map(op => {
@@ -28,10 +28,14 @@ export class ManufacturingV2Integration {
     
     console.log(`ManufacturingV2Integration: Converted to ${operations.length} machine operations`);
     
+    // Handle both ManufacturingPlan and GeneratedWorkflow interfaces
+    const planName = 'name' in plan ? plan.name : `Dynamic ${plan.targetProduct} (v2)`;
+    const planDescription = 'description' in plan ? plan.description : `Dynamically generated workflow for ${plan.targetProduct} (Manufacturing v2)`;
+    
     return {
-      id: `dynamic_${plan.targetProduct}_${Date.now()}`,
-      name: `Dynamic ${plan.targetProduct} (v2)`,
-      description: `Dynamically generated workflow for ${plan.targetProduct} (Manufacturing v2)`,
+      id: 'id' in plan ? plan.id : `dynamic_${plan.targetProduct}_${Date.now()}`,
+      name: planName,
+      description: planDescription,
       outputTags: [ItemTag.FORGED, ItemTag.LOW_TECH],
       qualityRange: [60, 90], // Conservative range
       operations,

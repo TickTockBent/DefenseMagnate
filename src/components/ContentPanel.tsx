@@ -7,6 +7,7 @@ import { MarketContent } from './MarketContent'
 import { EquipmentPanelSimple } from './EquipmentPanelSimple'
 import { AutomaticWorkflowGeneration, GeneratedWorkflow } from '../systems/automaticWorkflowGeneration'
 import { ManufacturingV2Integration } from '../systems/manufacturingV2Integration'
+import { ManufacturingPlan } from '../types/manufacturing'
 
 export function ContentPanel() {
   const activeTab = useGameStore((state) => state.activeTab)
@@ -14,26 +15,23 @@ export function ContentPanel() {
   const startMachineJob = useGameStore((state) => state.startMachineJob)
 
   // Handle job start from intelligent interface
-  const handleIntelligentJobStart = (workflow: GeneratedWorkflow, enhancements?: any) => {
+  const handleIntelligentJobStart = (plan: GeneratedWorkflow, enhancements?: any) => {
     const facility = facilities[0]; // Use main facility
-    if (!facility) return;
+    if (!facility) {
+      console.error('No facility available for job creation');
+      return;
+    }
 
-    // Convert generated workflow to machine-based method format
-    const method = ManufacturingV2Integration.convertPlanToMethod({
-      targetProduct: workflow.id,
-      targetQuantity: 1,
-      inputAnalysis: [],
-      componentGaps: [],
-      requiredOperations: workflow.operations,
-      estimatedDuration: workflow.estimatedDuration,
-      materialRequirements: workflow.materialRequirements,
-      planningTime: Date.now(),
-      plannerVersion: 'v2.1',
-      confidence: workflow.confidence
-    });
+    console.log('Creating job from plan:', plan.name, 'with', plan.requiredOperations.length, 'operations');
 
-    // Start the job
-    startMachineJob(facility.id, workflow.id, method.id, 1, enhancements);
+    // Convert unified plan directly to machine-based method format
+    const method = ManufacturingV2Integration.convertPlanToMethod(plan);
+    
+    console.log('Converted to method:', method.name, 'with ID:', method.id);
+
+    // Start the job using the target product from the plan
+    startMachineJob(facility.id, plan.targetProduct, method.id, plan.targetQuantity, enhancements);
+    console.log('Job started successfully');
   };
 
   const renderContent = () => {

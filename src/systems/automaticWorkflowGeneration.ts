@@ -12,25 +12,37 @@ import {
   TagCategory,
   ItemManufacturingType,
   MaterialRequirement,
-  LaborSkill
+  LaborSkill,
+  ManufacturingPlan
 } from '../types';
 import { getBaseItem } from '../data/baseItems';
 import { ManufacturingRulesEngine } from '../systems/manufacturingRules';
 
+// Unified workflow interface that extends ManufacturingPlan
 export interface GeneratedWorkflow {
+  // ManufacturingPlan core fields
   id: string;
+  targetProduct: string;
+  targetQuantity: number;
+  inputAnalysis: import('../types/manufacturing').ConditionAnalysis[];
+  componentGaps: import('../types/manufacturing').ComponentGap[];
+  requiredOperations: DynamicOperation[];
+  estimatedDuration: number; // total time in game hours
+  materialRequirements: MaterialRequirement[];
+  enhancementOptions?: import('../types/enhancement').Enhancement[];
+  planningTime: number;
+  plannerVersion: string;
+  confidence: number;
+  
+  // Additional workflow-specific fields
   name: string;
   description: string;
-  operations: DynamicOperation[];
-  estimatedDuration: number; // total time in hours
-  materialRequirements: MaterialRequirement[];
   expectedOutputs: Array<{
     itemId: string;
     quantity: number;
     tags: ItemTag[];
     quality: number;
   }>;
-  confidence: number; // 0-1 how reliable this workflow is
   riskFactors: string[];
 }
 
@@ -80,19 +92,27 @@ export class AutomaticWorkflowGeneration {
     totalDuration += reassemblyOp.baseDurationMinutes;
 
     return {
+      // Unified interface fields
       id: `repair_${baseItem.id}_${Date.now()}`,
-      name: `Repair ${baseItem.name}`,
-      description: `Complete repair workflow: disassembly → analysis → treatment → component replacement → reassembly`,
-      operations,
+      targetProduct: baseItem.id,
+      targetQuantity: item.quantity,
+      inputAnalysis: [], // Could be enhanced to analyze item condition
+      componentGaps: [], // Could be enhanced to identify missing components
+      requiredOperations: operations,
       estimatedDuration: totalDuration / 60, // Convert to hours
       materialRequirements,
+      planningTime: Date.now(),
+      plannerVersion: 'auto-repair-v3.0',
+      confidence: 0.75, // Repair outcomes can be unpredictable
+      
+      name: `Repair ${baseItem.name}`,
+      description: `Complete repair workflow: disassembly → analysis → treatment → component replacement → reassembly`,
       expectedOutputs: [{
         itemId: baseItem.id,
         quantity: item.quantity,
         tags: [ItemTag.RESTORED], // Repaired items get restored tag
         quality: Math.min(targetQuality, 85) // Repairs typically cap at 85% quality
       }],
-      confidence: 0.75, // Repair outcomes can be unpredictable
       riskFactors: [
         'Some damage may be irreparable',
         'Component replacement may not match original quality',
@@ -142,14 +162,22 @@ export class AutomaticWorkflowGeneration {
     const expectedComponents = this.predictComponentRecovery(item, baseItem, preserveQuality);
 
     return {
+      // Unified interface fields
       id: `disassemble_${baseItem.id}_${Date.now()}`,
-      name: `Disassemble ${baseItem.name}`,
-      description: `Systematic disassembly: ${disassemblyMethod} breakdown → component sorting → cleaning`,
-      operations,
+      targetProduct: `disassembled_${baseItem.id}`,
+      targetQuantity: item.quantity,
+      inputAnalysis: [], // Could be enhanced to analyze assembly condition
+      componentGaps: [], // No gaps for disassembly
+      requiredOperations: operations,
       estimatedDuration: totalDuration / 60,
       materialRequirements: [], // Disassembly doesn't consume materials
-      expectedOutputs: expectedComponents,
+      planningTime: Date.now(),
+      plannerVersion: 'auto-disassembly-v3.0',
       confidence: preserveQuality ? 0.85 : 0.7, // Careful disassembly is more predictable
+      
+      name: `Disassemble ${baseItem.name}`,
+      description: `Systematic disassembly: ${disassemblyMethod} breakdown → component sorting → cleaning`,
+      expectedOutputs: expectedComponents,
       riskFactors: preserveQuality 
         ? ['Component wear during removal', 'Hidden internal damage']
         : ['Component damage from fast disassembly', 'Possible material loss']
@@ -230,19 +258,27 @@ export class AutomaticWorkflowGeneration {
     }
 
     return {
+      // Unified interface fields
       id: `manufacture_${baseItem.id}_${Date.now()}`,
-      name: `Manufacture ${baseItem.name}`,
-      description: `Complete manufacturing workflow: material preparation → processing → assembly → finishing`,
-      operations,
+      targetProduct: baseItem.id,
+      targetQuantity: quantity,
+      inputAnalysis: [], // Could be enhanced to analyze material condition
+      componentGaps: [], // Could be enhanced to identify missing materials
+      requiredOperations: operations,
       estimatedDuration: totalDuration / 60, // Convert to hours
       materialRequirements,
+      planningTime: Date.now(),
+      plannerVersion: 'auto-manufacturing-v3.0',
+      confidence: 0.85, // Manufacturing is generally more predictable than repair
+      
+      name: `Manufacture ${baseItem.name}`,
+      description: `Complete manufacturing workflow: material preparation → processing → assembly → finishing`,
       expectedOutputs: [{
         itemId: baseItem.id,
         quantity: quantity,
         tags: [],
         quality: 75 // Standard manufacturing quality
       }],
-      confidence: 0.85, // Manufacturing is generally more predictable than repair
       riskFactors: [
         'Material quality may affect final output',
         'Complex assemblies may require additional time',
@@ -281,19 +317,27 @@ export class AutomaticWorkflowGeneration {
     totalDuration += assessmentOp.baseDurationMinutes;
 
     return {
+      // Unified interface fields
       id: `treatment_${baseItem.id}_${Date.now()}`,
-      name: `Treat ${baseItem.name}`,
-      description: `Environmental damage treatment: ${conditions.join(' + ')} removal → quality assessment`,
-      operations,
+      targetProduct: baseItem.id,
+      targetQuantity: item.quantity,
+      inputAnalysis: [], // Could be enhanced to analyze contamination level
+      componentGaps: [], // No gaps for treatment
+      requiredOperations: operations,
       estimatedDuration: totalDuration / 60,
       materialRequirements: this.getTreatmentMaterials(conditions),
+      planningTime: Date.now(),
+      plannerVersion: 'auto-treatment-v3.0',
+      confidence: 0.8,
+      
+      name: `Treat ${baseItem.name}`,
+      description: `Environmental damage treatment: ${conditions.join(' + ')} removal → quality assessment`,
       expectedOutputs: [{
         itemId: baseItem.id,
         quantity: item.quantity,
         tags: item.tags.filter(tag => !conditions.includes(tag)), // Remove treated conditions
         quality: Math.min(item.quality + 15, 100) // Treatment can improve quality
       }],
-      confidence: 0.8,
       riskFactors: [
         'Some environmental damage may be permanent',
         'Treatment chemicals may affect other components'
