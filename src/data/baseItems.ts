@@ -642,3 +642,62 @@ export function getComponents(): BaseItem[] {
 export function isValidBaseItemId(itemId: string): boolean {
   return itemId in baseItems;
 }
+
+// Validate all material references in a workflow/operation
+export function validateMaterialReferences(operation: {
+  materialConsumption?: Array<{ itemId?: string }>;
+  materialProduction?: Array<{ itemId?: string }>;
+  material_requirements?: Array<{ material_id?: string }>;
+}): { valid: boolean; missingItems: string[] } {
+  const missingItems: string[] = [];
+  
+  // Check materialConsumption
+  if (operation.materialConsumption) {
+    for (const material of operation.materialConsumption) {
+      if (material.itemId && !isValidBaseItemId(material.itemId)) {
+        missingItems.push(material.itemId);
+      }
+    }
+  }
+  
+  // Check materialProduction  
+  if (operation.materialProduction) {
+    for (const material of operation.materialProduction) {
+      if (material.itemId && !isValidBaseItemId(material.itemId)) {
+        missingItems.push(material.itemId);
+      }
+    }
+  }
+  
+  // Check legacy material_requirements
+  if (operation.material_requirements) {
+    for (const material of operation.material_requirements) {
+      if (material.material_id && !isValidBaseItemId(material.material_id)) {
+        missingItems.push(material.material_id);
+      }
+    }
+  }
+  
+  return {
+    valid: missingItems.length === 0,
+    missingItems: [...new Set(missingItems)] // Remove duplicates
+  };
+}
+
+// Validate all assembly components are defined
+export function validateAssemblyComponents(baseItem: BaseItem): { valid: boolean; missingComponents: string[] } {
+  const missingComponents: string[] = [];
+  
+  if (baseItem.assemblyComponents) {
+    for (const component of baseItem.assemblyComponents) {
+      if (!isValidBaseItemId(component.componentId)) {
+        missingComponents.push(component.componentId);
+      }
+    }
+  }
+  
+  return {
+    valid: missingComponents.length === 0,
+    missingComponents
+  };
+}

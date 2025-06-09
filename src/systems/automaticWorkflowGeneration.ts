@@ -537,50 +537,79 @@ export class AutomaticWorkflowGeneration {
     baseItem: BaseItem,
     materialRequirements: MaterialRequirement[]
   ): DynamicOperation {
-    // For repairs, we need replacement components based on actual assembly components
-    // Estimate how many components need replacement based on damage level
-    const damagePercentage = (100 - item.quality) / 100;
-    const repairComponentFactor = 0.3; // Up to 30% of components may need replacement
+    // MANUFACTURING V2: Component repair with conditional replacement
+    // This operation should:
+    // 1. Consume the extracted components from job inventory (from disassembly)
+    // 2. Conditionally consume replacement parts for damaged components
+    // 3. Produce repaired/functional components back to job inventory
     
     const materialConsumption: Array<{ itemId: string; count: number; tags?: string[] }> = [];
+    const materialProduction: Array<{ itemId: string; count: number; tags?: string[]; quality?: number }> = [];
     
     if (baseItem.assemblyComponents && baseItem.assemblyComponents.length > 0) {
-      console.log(`AutomaticWorkflowGeneration: Creating repair operation for ${baseItem.name} using actual components`);
+      console.log(`AutomaticWorkflowGeneration: Creating Manufacturing v2 repair operation for ${baseItem.name}`);
       
       for (const component of baseItem.assemblyComponents) {
-        // Calculate how many of this component type might need replacement
-        const componentReplacementChance = Math.min(1.0, damagePercentage + 0.1); // Always at least 10% chance
-        const replacementNeeded = Math.random() < componentReplacementChance ? 1 : 0;
+        // CONSUME: Take the disassembled component from job inventory for inspection
+        materialConsumption.push({
+          itemId: component.componentId,
+          count: component.quantity * item.quantity,
+          tags: [] // Accept any condition for inspection
+        });
         
-        if (replacementNeeded > 0) {
+        // Determine repair strategy based on damage level
+        const damagePercentage = (100 - item.quality) / 100;
+        const componentDamageChance = Math.min(0.8, damagePercentage + 0.2); // More realistic damage assessment
+        const needsReplacement = Math.random() < componentDamageChance;
+        
+        if (needsReplacement) {
+          // CONSUME: Replacement parts from facility inventory  
           materialConsumption.push({
             itemId: component.componentId,
-            count: replacementNeeded * item.quantity,
-            tags: [] // Accept any quality for repair components
+            count: component.quantity * item.quantity,
+            tags: [] // New replacement components
+          });
+          
+          // PRODUCE: New functional component
+          materialProduction.push({
+            itemId: component.componentId,
+            count: component.quantity * item.quantity,
+            tags: [], // Clean, functional component
+            quality: 85 // Replacement components are good quality
           });
           
           // Add to legacy material requirements for compatibility
           materialRequirements.push({
             material_id: component.componentId,
-            quantity: replacementNeeded * item.quantity,
+            quantity: component.quantity * item.quantity,
             consumed_at_start: false
           });
           
-          console.log(`AutomaticWorkflowGeneration: Repair will need ${replacementNeeded}x ${component.componentId} for replacement`);
+          console.log(`AutomaticWorkflowGeneration: Will replace ${component.quantity}x ${component.componentId} (damaged)`);
+        } else {
+          // PRODUCE: Restore the existing component (just cleaned/inspected)
+          materialProduction.push({
+            itemId: component.componentId,
+            count: component.quantity * item.quantity,
+            tags: [], // Restored component
+            quality: Math.min(item.quality + 10, 90) // Slight improvement from repair
+          });
+          
+          console.log(`AutomaticWorkflowGeneration: Will restore ${component.quantity}x ${component.componentId} (repairable)`);
         }
       }
     } else {
       console.warn(`AutomaticWorkflowGeneration: No assembly components found for ${baseItem.name}, using fallback repair materials`);
-      // Fallback - use basic materials
+      // Fallback - generic repair with simple improvement
       materialConsumption.push({
-        itemId: 'steel',
-        count: Math.max(1, Math.round(damagePercentage * 3)),
+        itemId: 'low_tech_spares',
+        count: Math.max(1, Math.round((100 - item.quality) / 20)),
         tags: []
       });
       
       materialRequirements.push({
-        material_id: 'steel',
-        quantity: Math.max(1, Math.round(damagePercentage * 3)),
+        material_id: 'low_tech_spares',
+        quantity: Math.max(1, Math.round((100 - item.quality) / 20)),
         consumed_at_start: false
       });
     }
@@ -588,7 +617,7 @@ export class AutomaticWorkflowGeneration {
     return {
       id: `component_repair_${Date.now()}`,
       name: 'Component Repair/Replacement',
-      description: 'Replace damaged components and repair repairable ones',
+      description: 'Inspect components and replace/repair as needed, then return functional components to job inventory',
       operationType: OperationType.ASSEMBLY,
       requiredTag: {
         category: TagCategory.BASIC_MANIPULATION,
@@ -596,10 +625,11 @@ export class AutomaticWorkflowGeneration {
       },
       baseDurationMinutes: 45 * item.quantity,
       materialConsumption,
+      materialProduction, // THIS WAS MISSING! Components must be produced back to job inventory
       can_fail: true,
       failure_chance: 0.15,
       labor_skill: 'skilled_technician',
-      generatedReason: 'Component replacement for repair',
+      generatedReason: 'Component inspection, repair, and replacement for repair workflow',
       isConditional: false
     };
   }
@@ -625,9 +655,9 @@ export class AutomaticWorkflowGeneration {
       }
     } else {
       console.warn(`AutomaticWorkflowGeneration: No assemblyComponents found for ${baseItem.name}, assembly may fail`);
-      // Fallback - create generic material requirement
+      // Fallback - use generic components from baseItems
       materialConsumption.push({
-        itemId: 'generic-components',
+        itemId: 'machined_parts', // Use defined machined parts for assembly fallback
         count: 3 * item.quantity,
         tags: []
       });
@@ -858,10 +888,16 @@ export class AutomaticWorkflowGeneration {
     } else {
       // Fallback for items without assembly definitions
       console.warn(`AutomaticWorkflowGeneration: No assemblyComponents found for ${baseItem.name}, using generic breakdown`);
+      // Use properly defined scrap materials from baseItems
       outputs.push({
-        itemId: 'scrap-materials',
-        count: item.quantity * 2, // Generic scrap materials
-        quality: Math.round(item.quality * qualityRetention * 0.5) // Much lower quality for unknown disassembly
+        itemId: 'steel-scrap',
+        count: item.quantity * 1, // Steel scrap from metal items
+        quality: Math.round(item.quality * qualityRetention * 0.6)
+      });
+      outputs.push({
+        itemId: 'plastic-scrap', 
+        count: item.quantity * 1, // Plastic scrap from housing/casings
+        quality: Math.round(item.quality * qualityRetention * 0.4)
       });
     }
     
