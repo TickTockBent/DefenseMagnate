@@ -111,7 +111,7 @@ interface GameState {
   contractState: ContractState;
   
   // UI State
-  activeTab: 'research' | 'manufacturing' | 'job_planning' | 'equipment' | 'market' | 'contracts';
+  activeTab: 'research' | 'manufacturing' | 'catalog' | 'equipment' | 'market' | 'contracts';
   selectedFacilityId: string | null;
   
   // Notifications

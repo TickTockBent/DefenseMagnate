@@ -42,7 +42,7 @@ export function ContentPanel() {
         return <ResearchContent />
       case 'manufacturing':
         return <MachineWorkspaceView />
-      case 'job_planning':
+      case 'catalog':
         return (
           <IntelligentJobCreationInterface 
             facility={facilities[0]} 

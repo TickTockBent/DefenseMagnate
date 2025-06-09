@@ -157,6 +157,101 @@ export class AutomaticWorkflowGeneration {
   }
 
   /**
+   * Generate manufacturing workflow for creating new products
+   */
+  static generateManufacturingWorkflow(
+    baseItem: BaseItem,
+    quantity: number = 1
+  ): GeneratedWorkflow {
+    console.log(`AutomaticWorkflowGeneration: Generating manufacturing workflow for ${baseItem.name}`);
+
+    const operations: DynamicOperation[] = [];
+    const materialRequirements: MaterialRequirement[] = [];
+    let totalDuration = 0;
+
+    if (baseItem.manufacturingType === ItemManufacturingType.ASSEMBLY && baseItem.assemblyComponents) {
+      // Generate assembly workflow based on component requirements
+      
+      // Step 1: Material preparation
+      baseItem.assemblyComponents.forEach((component, index) => {
+        const prepOp = this.createMaterialPreparationOperation(component, index, quantity);
+        operations.push(prepOp);
+        totalDuration += prepOp.baseDurationMinutes;
+        
+        // Add material requirements
+        materialRequirements.push({
+          material_id: component.componentId,
+          quantity: component.quantity * quantity,
+          consumed_at_start: true
+        });
+      });
+
+      // Step 2: Quality inspection of components
+      const inspectionOp = this.createComponentInspectionOperation(baseItem, quantity);
+      operations.push(inspectionOp);
+      totalDuration += inspectionOp.baseDurationMinutes;
+
+      // Step 3: Assembly process
+      const assemblyOp = this.createAssemblyOperation(baseItem, quantity);
+      operations.push(assemblyOp);
+      totalDuration += assemblyOp.baseDurationMinutes;
+
+      // Step 4: Final testing and finishing
+      const finishingOp = this.createFinishingOperation(baseItem, quantity);
+      operations.push(finishingOp);
+      totalDuration += finishingOp.baseDurationMinutes;
+
+    } else if (baseItem.manufacturingType === ItemManufacturingType.SHAPED_MATERIAL) {
+      // Generate shaping workflow from raw materials
+      
+      // Step 1: Raw material preparation
+      const materialPrepOp = this.createRawMaterialPrepOperation(baseItem, quantity);
+      operations.push(materialPrepOp);
+      totalDuration += materialPrepOp.baseDurationMinutes;
+
+      // Add material requirement for source material
+      if (baseItem.materialSource) {
+        materialRequirements.push({
+          material_id: baseItem.materialSource,
+          quantity: quantity,
+          consumed_at_start: true
+        });
+      }
+
+      // Step 2: Shaping operation (turning, milling, etc.)
+      const shapingOp = this.createShapingOperation(baseItem, quantity);
+      operations.push(shapingOp);
+      totalDuration += shapingOp.baseDurationMinutes;
+
+      // Step 3: Quality control
+      const qcOp = this.createQualityControlOperation(baseItem, quantity);
+      operations.push(qcOp);
+      totalDuration += qcOp.baseDurationMinutes;
+    }
+
+    return {
+      id: `manufacture_${baseItem.id}_${Date.now()}`,
+      name: `Manufacture ${baseItem.name}`,
+      description: `Complete manufacturing workflow: material preparation → processing → assembly → finishing`,
+      operations,
+      estimatedDuration: totalDuration / 60, // Convert to hours
+      materialRequirements,
+      expectedOutputs: [{
+        itemId: baseItem.id,
+        quantity: quantity,
+        tags: [],
+        quality: 75 // Standard manufacturing quality
+      }],
+      confidence: 0.85, // Manufacturing is generally more predictable than repair
+      riskFactors: [
+        'Material quality may affect final output',
+        'Complex assemblies may require additional time',
+        'Equipment precision affects final quality'
+      ]
+    };
+  }
+
+  /**
    * Generate treatment workflow for environmental damage
    */
   static generateTreatmentWorkflow(
@@ -524,5 +619,173 @@ export class AutomaticWorkflowGeneration {
     });
     
     return materials;
+  }
+
+  // Helper methods for manufacturing workflow generation
+
+  private static createMaterialPreparationOperation(component: any, index: number, quantity: number): DynamicOperation {
+    return {
+      id: `prep_material_${index}_${Date.now()}`,
+      name: `Prepare ${component.componentId}`,
+      description: `Prepare and verify ${component.componentId} components for assembly`,
+      operationType: OperationType.SHAPING,
+      requiredTag: {
+        category: TagCategory.BASIC_MANIPULATION,
+        minimum: 1
+      },
+      baseDurationMinutes: 5 * component.quantity * quantity,
+      can_fail: false,
+      failure_chance: 0,
+      labor_skill: 'unskilled',
+      generatedReason: `Material preparation for ${component.componentId}`,
+      isConditional: false
+    };
+  }
+
+  private static createComponentInspectionOperation(baseItem: BaseItem, quantity: number): DynamicOperation {
+    return {
+      id: `inspect_components_${Date.now()}`,
+      name: 'Component Inspection',
+      description: 'Inspect all components for quality and compatibility',
+      operationType: OperationType.SHAPING,
+      requiredTag: {
+        category: TagCategory.MEASURING,
+        minimum: 1
+      },
+      baseDurationMinutes: 10 * quantity,
+      can_fail: true,
+      failure_chance: 0.05,
+      labor_skill: 'skilled_technician',
+      generatedReason: 'Quality control for assembly components',
+      isConditional: false
+    };
+  }
+
+  private static createAssemblyOperation(baseItem: BaseItem, quantity: number): DynamicOperation {
+    const complexityMultiplier = baseItem.assemblyComponents?.length || 1;
+    
+    return {
+      id: `assemble_${Date.now()}`,
+      name: 'Primary Assembly',
+      description: `Assemble ${baseItem.name} from prepared components`,
+      operationType: OperationType.ASSEMBLY,
+      requiredTag: {
+        category: TagCategory.BASIC_MANIPULATION,
+        minimum: 3
+      },
+      baseDurationMinutes: 30 * quantity * complexityMultiplier,
+      materialProduction: [{
+        itemId: baseItem.id,
+        count: quantity,
+        tags: [],
+        quality: 75
+      }],
+      can_fail: true,
+      failure_chance: 0.1,
+      labor_skill: 'skilled_technician',
+      generatedReason: `Assembly of ${baseItem.name}`,
+      isConditional: false
+    };
+  }
+
+  private static createFinishingOperation(baseItem: BaseItem, quantity: number): DynamicOperation {
+    return {
+      id: `finish_${Date.now()}`,
+      name: 'Finishing & QC',
+      description: 'Final finishing touches and quality control',
+      operationType: OperationType.SHAPING,
+      requiredTag: {
+        category: TagCategory.PRECISION_MANIPULATION,
+        minimum: 1
+      },
+      baseDurationMinutes: 15 * quantity,
+      can_fail: true,
+      failure_chance: 0.05,
+      labor_skill: 'skilled_technician',
+      generatedReason: 'Final finishing and quality control',
+      isConditional: false
+    };
+  }
+
+  private static createRawMaterialPrepOperation(baseItem: BaseItem, quantity: number): DynamicOperation {
+    return {
+      id: `prep_raw_${Date.now()}`,
+      name: 'Raw Material Preparation',
+      description: `Prepare raw materials for ${baseItem.name} production`,
+      operationType: OperationType.SHAPING,
+      requiredTag: {
+        category: TagCategory.BASIC_MANIPULATION,
+        minimum: 1
+      },
+      baseDurationMinutes: 10 * quantity,
+      can_fail: false,
+      failure_chance: 0,
+      labor_skill: 'unskilled',
+      generatedReason: 'Raw material preparation',
+      isConditional: false
+    };
+  }
+
+  private static createShapingOperation(baseItem: BaseItem, quantity: number): DynamicOperation {
+    // Determine the appropriate shaping operation based on the item
+    let operationName = 'Shaping';
+    let requiredTag = TagCategory.BASIC_MANIPULATION;
+    let duration = 20;
+
+    if (baseItem.id.includes('tube') || baseItem.id.includes('cylinder')) {
+      operationName = 'Turning';
+      requiredTag = TagCategory.TURNING;
+      duration = 25;
+    } else if (baseItem.id.includes('billet') || baseItem.id.includes('component')) {
+      operationName = 'Milling';
+      requiredTag = TagCategory.MILLING;
+      duration = 30;
+    } else if (baseItem.id.includes('casing')) {
+      operationName = 'Forming';
+      requiredTag = TagCategory.FORMING;
+      duration = 15;
+    }
+
+    return {
+      id: `shape_${Date.now()}`,
+      name: operationName,
+      description: `${operationName} operation to create ${baseItem.name}`,
+      operationType: OperationType.SHAPING,
+      requiredTag: {
+        category: requiredTag,
+        minimum: 1
+      },
+      baseDurationMinutes: duration * quantity,
+      materialProduction: [{
+        itemId: baseItem.id,
+        count: quantity,
+        tags: [],
+        quality: 70
+      }],
+      can_fail: true,
+      failure_chance: 0.1,
+      labor_skill: 'skilled_machinist',
+      generatedReason: `${operationName} to create ${baseItem.name}`,
+      isConditional: false
+    };
+  }
+
+  private static createQualityControlOperation(baseItem: BaseItem, quantity: number): DynamicOperation {
+    return {
+      id: `qc_${Date.now()}`,
+      name: 'Quality Control',
+      description: 'Final dimensional and quality inspection',
+      operationType: OperationType.SHAPING,
+      requiredTag: {
+        category: TagCategory.MEASURING,
+        minimum: 1
+      },
+      baseDurationMinutes: 8 * quantity,
+      can_fail: true,
+      failure_chance: 0.05,
+      labor_skill: 'skilled_technician',
+      generatedReason: 'Quality control inspection',
+      isConditional: false
+    };
   }
 }

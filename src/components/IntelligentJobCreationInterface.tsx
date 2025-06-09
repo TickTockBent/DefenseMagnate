@@ -7,6 +7,8 @@ import {
   Facility, 
   ItemInstance, 
   BaseItem,
+  ItemTag,
+  ItemManufacturingType,
   Enhancement,
   EnhancementSelection
 } from '../types';
@@ -69,7 +71,13 @@ export function IntelligentJobCreationInterface({ facility, onJobStart }: Intell
       let workflow: GeneratedWorkflow | null = null;
       let treatment: TreatmentPlan | null = null;
 
-      if (item.type === 'inventory_item' && item.inventoryItem) {
+      if (item.type === 'new_product' && item.productId) {
+        // Generate manufacturing workflow for new product
+        const baseItem = getBaseItem(item.productId);
+        if (baseItem) {
+          workflow = AutomaticWorkflowGeneration.generateManufacturingWorkflow(baseItem, 1); // Generate for 1 unit
+        }
+      } else if (item.type === 'inventory_item' && item.inventoryItem) {
         const inventoryItem = item.inventoryItem;
         const baseItem = getBaseItem(inventoryItem.baseItemId);
         
@@ -171,7 +179,7 @@ export function IntelligentJobCreationInterface({ facility, onJobStart }: Intell
                 : 'bg-gray-800 text-gray-400 hover:text-gray-200'
             }`}
           >
-            🏭 PRODUCTS
+            📋 CATALOG
           </button>
           <button
             onClick={() => setActiveTab(LeftPanelTab.SEARCH)}
@@ -258,97 +266,154 @@ interface InventoryActionsPanelProps {
 }
 
 function InventoryActionsPanel({ inventoryItems, facility, onItemSelect, selectedItem }: InventoryActionsPanelProps) {
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const facilityCapabilities = facility.equipment_capacity || new Map();
   
-  // Group items by base type
-  const groupedItems = inventoryItems.reduce((acc, item) => {
-    const baseItem = getBaseItem(item.baseItemId);
-    if (!baseItem) return acc;
-    
-    const key = `${baseItem.id}_${item.tags.sort().join('_')}`;
-    if (!acc[key]) {
-      acc[key] = {
-        baseItem,
-        items: [],
-        totalQuantity: 0,
-        averageQuality: 0,
-        tags: item.tags
-      };
+  // Group items by base type and condition, filtering out raw materials
+  const groupedItems = inventoryItems
+    .filter(item => {
+      const baseItem = getBaseItem(item.baseItemId);
+      return baseItem && baseItem.manufacturingType !== ItemManufacturingType.RAW_MATERIAL; // Filter out tier 1 items
+    })
+    .reduce((acc, item) => {
+      const baseItem = getBaseItem(item.baseItemId);
+      if (!baseItem) return acc;
+      
+      // Group by base item and exact tag combination for clarity
+      const sortedTags = [...item.tags].sort();
+      const tagKey = sortedTags.length > 0 ? sortedTags.join('_') : 'pristine';
+      const key = `${baseItem.id}_${tagKey}`;
+      
+      if (!acc[key]) {
+        acc[key] = {
+          baseItem,
+          condition: item.tags.includes(ItemTag.DAMAGED) ? 'damaged' : 'functional',
+          items: [],
+          totalQuantity: 0,
+          averageQuality: 0,
+          tags: sortedTags
+        };
+      }
+      
+      acc[key].items.push(item);
+      acc[key].totalQuantity += item.quantity;
+      acc[key].averageQuality = acc[key].items.reduce((sum, i) => sum + i.quality * i.quantity, 0) / acc[key].totalQuantity;
+      
+      return acc;
+    }, {} as Record<string, { baseItem: BaseItem; condition: string; items: ItemInstance[]; totalQuantity: number; averageQuality: number; tags: string[] }>);
+
+  const toggleGroup = (key: string) => {
+    // Only allow one group to be expanded at a time
+    setExpandedGroup(expandedGroup === key ? null : key);
+  };
+
+  const getPrimaryActions = (items: ItemInstance[], condition: string): { action: string; icon: string; description: string }[] => {
+    if (condition === 'damaged') {
+      return [
+        { action: 'repair', icon: '🔧', description: 'Restore to working condition' },
+        { action: 'disassemble', icon: '🔬', description: 'Salvage usable components' }
+      ];
+    } else {
+      return [
+        { action: 'disassemble', icon: '🔬', description: 'Break down into components' },
+        { action: 'refurbish', icon: '✨', description: 'Improve quality and condition' }
+      ];
     }
-    
-    acc[key].items.push(item);
-    acc[key].totalQuantity += item.quantity;
-    acc[key].averageQuality = acc[key].items.reduce((sum, i) => sum + i.quality * i.quantity, 0) / acc[key].totalQuantity;
-    
-    return acc;
-  }, {} as Record<string, { baseItem: BaseItem; items: ItemInstance[]; totalQuantity: number; averageQuality: number; tags: string[] }>);
+  };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <div className="text-xs text-gray-400 mb-4">
-        Items available for processing ({Object.keys(groupedItems).length} types):
+        Inventory items ({Object.keys(groupedItems).length} groups):
       </div>
       
       {Object.entries(groupedItems).map(([key, group]) => {
+        const isExpanded = expandedGroup === key;
         const representativeItem = group.items[0];
-        const actions = InventoryActionDiscovery.analyzeItem(representativeItem, facility, equipmentDatabase);
+        const primaryActions = getPrimaryActions(group.items, group.condition);
         
         return (
-          <div key={key} className="border border-gray-700 bg-gray-800">
-            <div className="p-3 border-b border-gray-700">
-              <div className="flex justify-between items-start">
+          <div key={key} className="border border-gray-700 bg-gray-800 rounded">
+            {/* Collapsible Header */}
+            <button
+              onClick={() => toggleGroup(key)}
+              className="w-full p-3 text-left flex items-center justify-between hover:bg-gray-750 transition-colors"
+            >
+              <div className="flex items-center space-x-3">
+                <span className="text-gray-400 text-sm">{isExpanded ? '▼' : '▶'}</span>
                 <div>
-                  <div className="font-bold text-teal-400 text-sm">{group.baseItem.name}</div>
+                  <div className="font-medium text-teal-400 text-sm">
+                    {group.baseItem.name}
+                    {group.tags.length > 0 ? (
+                      <span className="ml-2 text-xs text-blue-300">
+                        [{group.tags.join(', ')}]
+                      </span>
+                    ) : (
+                      <span className="ml-2 text-xs px-2 py-1 rounded bg-green-900 text-green-300">
+                        pristine
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-gray-400">
                     {group.totalQuantity} units • {Math.round(group.averageQuality)}% quality
                   </div>
-                  {group.tags.length > 0 && (
-                    <div className="text-xs text-blue-300 mt-1">
-                      [{group.tags.join(', ')}]
-                    </div>
-                  )}
-                </div>
-                <div className="text-xs text-gray-500">
-                  {actions.filter(a => a.feasible).length} actions available
                 </div>
               </div>
-            </div>
+              <div className="text-xs text-gray-500">
+                {primaryActions.length} actions
+              </div>
+            </button>
             
-            <div className="p-2 space-y-1">
-              {actions.slice(0, 4).map((action, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onItemSelect({ 
-                    type: 'discovered_action', 
-                    action, 
-                    inventoryItem: representativeItem 
-                  })}
-                  disabled={!action.feasible}
-                  className={`w-full text-left px-2 py-1 text-xs rounded transition-colors ${
-                    action.feasible
-                      ? selectedItem?.type === 'discovered_action' && selectedItem?.action?.type === action.type
-                        ? 'bg-teal-700 text-teal-100'
-                        : 'hover:bg-gray-700 text-gray-300'
-                      : 'text-gray-600 cursor-not-allowed'
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <span>{getActionIcon(action.type)} {action.name}</span>
-                    <span className={action.feasible ? 'text-green-400' : 'text-red-400'}>
-                      {action.feasible ? '✓' : '✗'}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {action.description}
-                  </div>
-                  {action.feasible && (
-                    <div className="text-xs text-gray-400 mt-1">
-                      ~{action.estimatedTime}min • {action.estimatedCost}cr cost • {action.estimatedValue}cr value
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
+            {/* Expanded Actions */}
+            {isExpanded && (
+              <div className="border-t border-gray-700 p-3 space-y-2">
+                {primaryActions.map((actionDef, idx) => {
+                  const actions = InventoryActionDiscovery.analyzeItem(representativeItem, facility, equipmentDatabase);
+                  const matchingAction = actions.find(a => a.name.toLowerCase().includes(actionDef.action));
+                  const isFeasible = matchingAction?.feasible ?? false;
+                  
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => matchingAction && onItemSelect({ 
+                        type: 'discovered_action', 
+                        action: matchingAction, 
+                        inventoryItem: representativeItem 
+                      })}
+                      disabled={!isFeasible}
+                      className={`w-full text-left p-2 rounded text-sm transition-colors ${
+                        isFeasible
+                          ? selectedItem?.type === 'discovered_action' && 
+                            selectedItem?.action?.name.toLowerCase().includes(actionDef.action) &&
+                            selectedItem?.inventoryItem?.baseItemId === representativeItem.baseItemId &&
+                            selectedItem?.inventoryItem?.tags.includes(ItemTag.DAMAGED) === (group.condition === 'damaged')
+                            ? 'bg-teal-700 text-teal-100 border border-teal-500'
+                            : 'hover:bg-gray-700 text-gray-300 border border-gray-600'
+                          : 'text-gray-600 cursor-not-allowed border border-gray-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <span>{actionDef.icon}</span>
+                          <span className="font-medium capitalize">{actionDef.action}</span>
+                        </div>
+                        <span className={isFeasible ? 'text-green-400' : 'text-red-400'}>
+                          {isFeasible ? '✓' : '✗'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1 ml-6">
+                        {actionDef.description}
+                      </div>
+                      {matchingAction && isFeasible && (
+                        <div className="text-xs text-gray-500 mt-1 ml-6">
+                          ~{matchingAction.estimatedTime}min • {matchingAction.estimatedCost}cr
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       })}
@@ -367,33 +432,144 @@ function ProductTreePanel({ onProductSelect, selectedProductId }: {
   onProductSelect: (productId: string) => void;
   selectedProductId?: string;
 }) {
-  // For now, show a simple list of available products
-  // This would be expanded into a full tree structure
-  const availableProducts = Object.values(baseItems);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedSubcategory, setExpandedSubcategory] = useState<string | null>(null);
   
+  // Group products by manufacturing method/process instead of abstract type
+  const getManufacturingMethod = (product: BaseItem): string => {
+    // Analyze the product to determine its primary manufacturing method
+    if (product.manufacturingType === ItemManufacturingType.ASSEMBLY) {
+      return 'Assembly Operations';
+    } else if (product.manufacturingType === ItemManufacturingType.SHAPED_MATERIAL) {
+      // Determine specific shaping method based on product characteristics
+      if (product.id.includes('tube') || product.id.includes('cylinder')) {
+        return 'Turning Operations';
+      } else if (product.id.includes('billet') || product.id.includes('component')) {
+        return 'Milling Operations';
+      } else if (product.id.includes('casing') || product.id.includes('plastic')) {
+        return 'Forming Operations';
+      } else {
+        return 'Precision Machining';
+      }
+    }
+    return 'Other Operations';
+  };
+
+  // Group products by category → manufacturing method, filtering out raw materials
+  const productsByCategory = Object.values(baseItems)
+    .filter(product => product.manufacturingType !== ItemManufacturingType.RAW_MATERIAL)
+    .reduce((acc, product) => {
+      const category = product.category;
+      const method = getManufacturingMethod(product);
+      
+      if (!acc[category]) {
+        acc[category] = {};
+      }
+      if (!acc[category][method]) {
+        acc[category][method] = [];
+      }
+      acc[category][method].push(product);
+      return acc;
+    }, {} as Record<string, Record<string, BaseItem[]>>);
+
+  const toggleCategory = (category: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(category)) {
+      newExpanded.delete(category);
+    } else {
+      newExpanded.add(category);
+    }
+    setExpandedCategories(newExpanded);
+  };
+
+  const toggleSubcategory = (subcategoryKey: string) => {
+    // Only allow one manufacturing method to be expanded at a time
+    setExpandedSubcategory(expandedSubcategory === subcategoryKey ? null : subcategoryKey);
+  };
+
   return (
     <div className="space-y-2">
       <div className="text-xs text-gray-400 mb-4">
-        Available products for manufacturing:
+        Manufacturing catalog (by operation type):
       </div>
       
-      {availableProducts.map(product => (
-        <button
-          key={product.id}
-          onClick={() => onProductSelect(product.id)}
-          className={`w-full text-left p-3 border border-gray-700 rounded transition-colors ${
-            selectedProductId === product.id
-              ? 'bg-teal-800 border-teal-600 text-teal-100'
-              : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
-          }`}
-        >
-          <div className="font-bold text-sm">{product.name}</div>
-          <div className="text-xs text-gray-400 mt-1">{product.description}</div>
-          <div className="text-xs text-gray-500 mt-1">
-            {product.category} • {product.manufacturingType}
+      {Object.entries(productsByCategory).map(([category, methodGroups]) => {
+        const isCategoryExpanded = expandedCategories.has(category);
+        const totalProducts = Object.values(methodGroups).flat().length;
+        
+        return (
+          <div key={category} className="border border-gray-700 bg-gray-800 rounded">
+            {/* Category Header */}
+            <button
+              onClick={() => toggleCategory(category)}
+              className="w-full p-3 text-left flex items-center justify-between hover:bg-gray-750 transition-colors"
+            >
+              <div className="flex items-center space-x-3">
+                <span className="text-gray-400 text-sm">{isCategoryExpanded ? '▼' : '▶'}</span>
+                <div>
+                  <div className="font-medium text-blue-400 text-sm capitalize">
+                    {category.replace('_', ' ').toLowerCase()}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {totalProducts} items • {Object.keys(methodGroups).length} methods
+                  </div>
+                </div>
+              </div>
+            </button>
+            
+            {/* Expanded Methods */}
+            {isCategoryExpanded && (
+              <div className="border-t border-gray-700 p-2 space-y-1">
+                {Object.entries(methodGroups).map(([method, products]) => {
+                  const subcategoryKey = `${category}_${method}`;
+                  const isSubcategoryExpanded = expandedSubcategory === subcategoryKey;
+                  
+                  return (
+                    <div key={method} className="border border-gray-600 bg-gray-900 rounded">
+                      {/* Method Header */}
+                      <button
+                        onClick={() => toggleSubcategory(subcategoryKey)}
+                        className="w-full p-2 text-left flex items-center justify-between hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <span className="text-gray-500 text-xs">{isSubcategoryExpanded ? '▼' : '▶'}</span>
+                          <div>
+                            <div className="text-sm text-yellow-400 font-medium">{method}</div>
+                            <div className="text-xs text-gray-500">{products.length} items</div>
+                          </div>
+                        </div>
+                      </button>
+                      
+                      {/* Expanded Products */}
+                      {isSubcategoryExpanded && (
+                        <div className="border-t border-gray-600 p-2 space-y-1">
+                          {products.map(product => (
+                            <button
+                              key={product.id}
+                              onClick={() => onProductSelect(product.id)}
+                              className={`w-full text-left p-2 rounded text-sm transition-colors ml-2 ${
+                                selectedProductId === product.id
+                                  ? 'bg-teal-700 text-teal-100 border border-teal-500'
+                                  : 'hover:bg-gray-700 text-gray-300 border border-gray-600'
+                              }`}
+                            >
+                              <div className="font-medium">{product.name}</div>
+                              <div className="text-xs text-gray-400 mt-1">{product.description}</div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {product.baseValue}cr • {product.manufacturingType.replace('_', ' ').toLowerCase()}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </button>
-      ))}
+        );
+      })}
     </div>
   );
 }
