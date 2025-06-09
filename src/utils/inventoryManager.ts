@@ -359,6 +359,19 @@ export class InventoryManager {
       percentage: Math.round((inventory.usedCapacity / inventory.storageCapacity) * 100)
     };
   }
+
+  // Get all items in inventory as a flat array
+  getAllItems(inventory: FacilityInventory): ItemInstance[] {
+    const allItems: ItemInstance[] = [];
+    
+    for (const group of inventory.groups.values()) {
+      for (const slot of group.slots) {
+        allItems.push(...slot.stack.instances);
+      }
+    }
+    
+    return allItems;
+  }
   
   // Optimize storage by combining compatible items
   optimizeStorage(inventory: FacilityInventory): InventoryOperation[] {
