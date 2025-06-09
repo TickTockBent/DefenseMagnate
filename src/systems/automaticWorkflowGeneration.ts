@@ -135,49 +135,45 @@ export class AutomaticWorkflowGeneration {
       throw new Error(`Cannot disassemble ${baseItem.manufacturingType} items`);
     }
 
-    console.log(`AutomaticWorkflowGeneration: Generating disassembly workflow for ${baseItem.name}`);
+    console.log(`AutomaticWorkflowGeneration: Generating Manufacturing v2 disassembly workflow for ${baseItem.name}`);
 
     const operations: DynamicOperation[] = [];
     let totalDuration = 0;
 
-    // Step 1: Careful disassembly
+    // PHASE 1: Component Extraction (without predetermined conditions)
     const disassemblyMethod = preserveQuality ? 'careful' : 'fast';
-    const disassemblyOp = this.createDisassemblyOperation(item, baseItem, disassemblyMethod);
-    operations.push(disassemblyOp);
-    totalDuration += disassemblyOp.baseDurationMinutes;
+    const extractionOp = this.createComponentExtractionOperation(item, baseItem, disassemblyMethod);
+    operations.push(extractionOp);
+    totalDuration += extractionOp.baseDurationMinutes;
 
-    // Step 2: Component sorting and cataloging
-    const sortingOp = this.createSortingOperation(item, baseItem);
-    operations.push(sortingOp);
-    totalDuration += sortingOp.baseDurationMinutes;
+    // PHASE 2: Component Assessment (discover actual conditions)
+    const assessmentOp = this.createComponentAssessmentOperation(item, baseItem);
+    operations.push(assessmentOp);
+    totalDuration += assessmentOp.baseDurationMinutes;
 
-    // Step 3: Cleaning if needed
-    if (this.needsCleaning(item)) {
-      const cleaningOp = this.createCleaningOperation(item, baseItem);
-      operations.push(cleaningOp);
-      totalDuration += cleaningOp.baseDurationMinutes;
-    }
-
-    // Predict component recovery based on assembly definition
-    const expectedComponents = this.predictComponentRecovery(item, baseItem, preserveQuality);
+    // PHASE 3: Component Processing (adaptive - actual operations determined at runtime)
+    // Note: Follow-up operations will be generated dynamically based on assessment results
+    const processingOp = this.createAdaptiveProcessingOperation(item, baseItem);
+    operations.push(processingOp);
+    totalDuration += processingOp.baseDurationMinutes;
 
     return {
       // Unified interface fields
       id: `disassemble_${baseItem.id}_${Date.now()}`,
       targetProduct: `disassembled_${baseItem.id}`,
       targetQuantity: item.quantity,
-      inputAnalysis: [], // Could be enhanced to analyze assembly condition
+      inputAnalysis: [], // Analysis happens during workflow execution
       componentGaps: [], // No gaps for disassembly
       requiredOperations: operations,
       estimatedDuration: totalDuration / 60,
       materialRequirements: [], // Disassembly doesn't consume materials
       planningTime: Date.now(),
-      plannerVersion: 'auto-disassembly-v3.0',
-      confidence: preserveQuality ? 0.85 : 0.7, // Careful disassembly is more predictable
+      plannerVersion: 'manufacturing-v2-dynamic',
+      confidence: 0.75, // Lower confidence due to uncertainty in component conditions
       
       name: `Disassemble ${baseItem.name}`,
-      description: `Systematic disassembly: ${disassemblyMethod} breakdown → component sorting → cleaning`,
-      expectedOutputs: expectedComponents,
+      description: `Manufacturing v2 disassembly: component extraction → condition assessment → adaptive processing`,
+      expectedOutputs: [], // Outputs discovered during assessment phase
       riskFactors: preserveQuality 
         ? ['Component wear during removal', 'Hidden internal damage']
         : ['Component damage from fast disassembly', 'Possible material loss']
@@ -347,11 +343,112 @@ export class AutomaticWorkflowGeneration {
 
   // Helper methods for creating specific operations
 
+  // MANUFACTURING V2: Component Extraction (Phase 1)
+  private static createComponentExtractionOperation(
+    item: ItemInstance, 
+    baseItem: BaseItem, 
+    method: 'careful' | 'fast'
+  ): DynamicOperation {
+    const methodMultipliers = {
+      careful: { time: 1.0, description: 'Carefully extract components preserving their condition' },
+      fast: { time: 0.6, description: 'Quickly extract components for rapid processing' }
+    };
+    
+    const multiplier = methodMultipliers[method];
+    
+    return {
+      id: `extract_components_${Date.now()}`,
+      name: `Component Extraction`,
+      description: multiplier.description,
+      operationType: OperationType.DISASSEMBLY,
+      requiredTag: {
+        category: TagCategory.BASIC_MANIPULATION,
+        minimum: 1
+      },
+      baseDurationMinutes: Math.round(20 * item.quantity * multiplier.time),
+      materialConsumption: [{
+        itemId: item.baseItemId,
+        count: item.quantity,
+        tags: item.tags
+      }],
+      // NO materialProduction - components are moved to job inventory for assessment
+      can_fail: method === 'fast',
+      failure_chance: method === 'fast' ? 0.1 : 0.02,
+      labor_skill: method === 'careful' ? 'skilled_technician' : 'unskilled',
+      generatedReason: `Extract components from ${baseItem.name} for condition assessment`,
+      isConditional: false
+    };
+  }
+
+  // MANUFACTURING V2: Component Assessment (Phase 2)
+  private static createComponentAssessmentOperation(
+    item: ItemInstance, 
+    baseItem: BaseItem
+  ): DynamicOperation {
+    // Generate material consumption for the extracted components
+    const materialConsumption: Array<{ itemId: string; count: number; tags?: string[] }> = [];
+    if (baseItem.assemblyComponents) {
+      for (const component of baseItem.assemblyComponents) {
+        materialConsumption.push({
+          itemId: component.componentId,
+          count: component.quantity * item.quantity,
+          tags: [] // Accept any condition for assessment
+        });
+      }
+    }
+    
+    return {
+      id: `assess_components_${Date.now()}`,
+      name: 'Component Assessment',
+      description: 'Inspect extracted components to discover their actual conditions',
+      operationType: OperationType.SHAPING, // Conceptual operation
+      requiredTag: {
+        category: TagCategory.MEASURING,
+        minimum: 1
+      },
+      baseDurationMinutes: 15 * item.quantity, // More thorough than simple analysis
+      // Assessment consumes extracted components and produces assessed components
+      materialConsumption: materialConsumption,
+      materialProduction: this.generateDiscoveredComponents(item, baseItem, 0.8),
+      can_fail: false,
+      failure_chance: 0,
+      labor_skill: 'skilled_technician',
+      generatedReason: 'Discover actual component conditions through inspection',
+      isConditional: false
+    };
+  }
+
+  // MANUFACTURING V2: Adaptive Processing (Phase 3)
+  private static createAdaptiveProcessingOperation(
+    item: ItemInstance, 
+    baseItem: BaseItem
+  ): DynamicOperation {
+    return {
+      id: `adaptive_processing_${Date.now()}`,
+      name: 'Adaptive Processing',
+      description: 'Process components based on discovered conditions (cleaning, treatment, or finalization)',
+      operationType: OperationType.SHAPING,
+      requiredTag: {
+        category: TagCategory.BASIC_MANIPULATION,
+        minimum: 1
+      },
+      baseDurationMinutes: 10 * item.quantity, // Variable based on what's discovered
+      can_fail: false,
+      failure_chance: 0,
+      labor_skill: 'unskilled',
+      generatedReason: 'Apply appropriate processing based on component assessment results',
+      isConditional: true // This operation adapts based on previous discoveries
+    };
+  }
+
+  // LEGACY: Keep for backwards compatibility but mark as deprecated
   private static createDisassemblyOperation(
     item: ItemInstance, 
     baseItem: BaseItem, 
     method: 'inspection' | 'careful' | 'fast'
   ): DynamicOperation {
+    console.warn('⚠️ DEPRECATED: createDisassemblyOperation should be replaced with Manufacturing v2 operations');
+    
     const methodMultipliers = {
       inspection: { time: 0.8, quality: 0.9 },
       careful: { time: 1.0, quality: 0.95 },
@@ -631,6 +728,52 @@ export class AutomaticWorkflowGeneration {
     return item.quality < 50 || this.needsEnvironmentalTreatment(item);
   }
 
+  // MANUFACTURING V2: Generate discovered components with realistic uncertainty
+  private static generateDiscoveredComponents(
+    item: ItemInstance, 
+    baseItem: BaseItem, 
+    discoveryAccuracy: number = 0.8
+  ): Array<{ itemId: string; count: number; tags?: ItemTag[]; quality?: number }> {
+    const outputs: Array<{ itemId: string; count: number; tags?: ItemTag[]; quality?: number }> = [];
+    
+    // Use recipe-based approach with discovery uncertainty
+    if (baseItem.assemblyComponents && baseItem.assemblyComponents.length > 0) {
+      console.log(`AutomaticWorkflowGeneration: Discovering components through assessment of ${baseItem.name}`);
+      console.log(`AutomaticWorkflowGeneration: Found ${baseItem.assemblyComponents.length} components in recipe`);
+      
+      for (const component of baseItem.assemblyComponents) {
+        // Simulate discovery: add randomness to represent uncertainty in component condition
+        const baseQuality = item.quality * discoveryAccuracy;
+        const uncertainty = 20; // ±20% uncertainty in condition assessment
+        const qualityVariation = (Math.random() - 0.5) * uncertainty;
+        let componentQuality = Math.round(Math.max(5, Math.min(95, baseQuality + qualityVariation)));
+        
+        // Determine component condition tags based on discovered quality
+        const componentTags: ItemTag[] = [];
+        if (componentQuality < 30) {
+          componentTags.push(ItemTag.DAMAGED);
+        }
+        if (item.tags.includes(ItemTag.DAMAGED) && componentQuality < 50) {
+          componentTags.push(ItemTag.DAMAGED);
+        }
+        
+        outputs.push({
+          itemId: component.componentId,
+          count: component.quantity * item.quantity,
+          tags: componentTags,
+          quality: componentQuality
+        });
+        
+        console.log(`AutomaticWorkflowGeneration: Discovered ${component.quantity}x ${component.componentId} at ${componentQuality}% quality`);
+      }
+    } else {
+      console.warn(`AutomaticWorkflowGeneration: No assembly components defined for ${baseItem.name}`);
+    }
+    
+    return outputs;
+  }
+
+  // LEGACY: Keep for backwards compatibility
   private static generateDisassemblyOutputs(
     item: ItemInstance, 
     baseItem: BaseItem, 

@@ -215,8 +215,8 @@ export const measuringToolsBasic = createEquipment({
   description: 'Calipers, micrometers, and gauges',
   tier: EquipmentTier.BASIC,
   tags: [
-    { category: TagCategory.MEASURING, value: true },
-    { category: TagCategory.QUALITY_CONTROL, value: true },
+    { category: TagCategory.MEASURING, value: 1, unit: 'level' },
+    { category: TagCategory.QUALITY_CONTROL, value: 1, unit: 'level' },
     { category: TagCategory.MANUAL, value: true }
   ],
   footprint: 0.5,
@@ -230,9 +230,9 @@ export const cmmBasic = createEquipment({
   description: 'Precision measurement system for quality control',
   tier: EquipmentTier.ADVANCED,
   tags: [
-    { category: TagCategory.MEASURING, value: true },
-    { category: TagCategory.QUALITY_CONTROL, value: true },
-    { category: TagCategory.DIMENSIONAL_INSPECTION, value: true },
+    { category: TagCategory.MEASURING, value: 5, unit: 'level' },
+    { category: TagCategory.QUALITY_CONTROL, value: 5, unit: 'level' },
+    { category: TagCategory.DIMENSIONAL_INSPECTION, value: 3, unit: 'level' },
     { category: TagCategory.POWERED, value: true },
     { category: TagCategory.COMPUTER_CONTROLLED, value: true },
     { category: TagCategory.PRECISION_MANIPULATION, value: 95, unit: '%' }

@@ -177,10 +177,13 @@ export class JobStateManager {
   private calculateJobState(jobState: JobStateInfo): JobReadinessState {
     const { job, dependsOn } = jobState;
     
-    // Check if already in terminal state
-    if ([JobReadinessState.COMPLETED, JobReadinessState.FAILED, JobReadinessState.CANCELLED, JobReadinessState.IN_PROGRESS].includes(jobState.state)) {
+    // Check if already in terminal state (Note: IN_PROGRESS is NOT terminal for Manufacturing v2 jobs)
+    if ([JobReadinessState.COMPLETED, JobReadinessState.FAILED, JobReadinessState.CANCELLED].includes(jobState.state)) {
       return jobState.state;
     }
+    
+    // For Manufacturing v2 jobs with sub-operations, re-evaluate readiness even if currently IN_PROGRESS
+    // This allows jobs to transition back to READY when new sub-operations become available
 
     // Check dependencies first
     for (const depId of dependsOn) {
@@ -193,7 +196,9 @@ export class JobStateManager {
 
     // Check sub-operation dependencies for Manufacturing v2 jobs
     if (job.subOperations && job.subOperations.size > 0) {
-      const readySubOps = Array.from(job.subOperations.values()).filter(subOp => {
+      const subOpStates = Array.from(job.subOperations.values());
+      const inProgressSubOps = subOpStates.filter(subOp => subOp.state === 'in_progress');
+      const queuedSubOps = subOpStates.filter(subOp => {
         // Check if previous operations are complete
         if (subOp.operationIndex > 0) {
           for (let i = 0; i < subOp.operationIndex; i++) {
@@ -204,17 +209,37 @@ export class JobStateManager {
           }
         }
         
-        // Check if materials are available (simplified check)
-        return subOp.state === 'pending' || subOp.state === 'queued';
+        // Sub-operation is ready if it's queued and dependencies are met
+        return subOp.state === 'queued';
       });
-
-      if (readySubOps.length === 0) {
-        jobState.blockedReason = 'No sub-operations ready to start';
-        return JobReadinessState.BLOCKED_BY_DEPENDENCIES;
+      
+      const completedSubOps = subOpStates.filter(subOp => subOp.state === 'completed');
+      
+      // Job is IN_PROGRESS if any sub-operations are currently running
+      if (inProgressSubOps.length > 0) {
+        jobState.blockedReason = `${inProgressSubOps.length} sub-operations in progress`;
+        return JobReadinessState.IN_PROGRESS;
       }
+      
+      // Job is COMPLETED if all sub-operations are completed
+      if (completedSubOps.length === subOpStates.length) {
+        jobState.blockedReason = undefined;
+        return JobReadinessState.COMPLETED;
+      }
+      
+      // Job stays IN_PROGRESS if there are queued sub-operations waiting to be assigned
+      // (Don't transition back to READY to avoid duplicates in queue)
+      if (queuedSubOps.length > 0) {
+        jobState.blockedReason = `${queuedSubOps.length} sub-operations ready for assignment`;
+        return JobReadinessState.IN_PROGRESS;
+      }
+      
+      // Job is BLOCKED if no sub-operations are ready
+      jobState.blockedReason = 'No sub-operations ready to start';
+      return JobReadinessState.BLOCKED_BY_DEPENDENCIES;
     }
 
-    // If we get here, job is ready to start
+    // If we get here, job is ready to start (no sub-operations)
     jobState.blockedReason = undefined;
     return JobReadinessState.READY_TO_START;
   }
@@ -248,12 +273,37 @@ export class JobStateManager {
     
     switch (state) {
       case JobReadinessState.READY_TO_START:
-        this.readyJobs.enqueue(job, this.getJobPriority(job));
-        console.log(`JobStateManager: Job ${job.id} added to ready queue`);
+        // Check if job is already in ready queue to prevent duplicates
+        const existingReadyJobs = this.readyJobs.toArray();
+        const alreadyInQueue = existingReadyJobs.some(existingJob => existingJob.id === job.id);
+        
+        if (!alreadyInQueue) {
+          this.readyJobs.enqueue(job, this.getJobPriority(job));
+          console.log(`JobStateManager: Job ${job.id} added to ready queue`);
+          
+          // Trigger job assignment for this facility
+          globalEventBus.emit(EventType.FACILITY_STATE_CHANGED, {
+            facilityId: job.facilityId,
+            readyJobAvailable: true,
+            jobId: job.id
+          });
+        } else {
+          console.log(`JobStateManager: Job ${job.id} already in ready queue, skipping duplicate`);
+        }
         break;
         
       case JobReadinessState.IN_PROGRESS:
         this.activeJobs.set(job.id, job);
+        
+        // If this is a Manufacturing v2 job with queued sub-operations, notify coordinator
+        if (job.subOperations && this.hasQueuedSubOperations(job)) {
+          console.log(`JobStateManager: Job ${job.id} has queued sub-operations, notifying coordinator`);
+          globalEventBus.emit(EventType.FACILITY_STATE_CHANGED, {
+            facilityId: job.facilityId,
+            readyJobAvailable: true,
+            jobId: job.id
+          });
+        }
         break;
         
       case JobReadinessState.COMPLETED:
@@ -287,6 +337,14 @@ export class JobStateManager {
     const ageBonus = Math.max(0, (Date.now() - job.createdAt) / (1000 * 60 * 60)); // 1 point per hour
     
     return basePriority + rushBonus + ageBonus;
+  }
+
+  // Check if a job has queued sub-operations that can be assigned
+  private hasQueuedSubOperations(job: MachineSlotJob): boolean {
+    if (!job.subOperations) return false;
+    
+    // Check for any sub-operations in 'queued' state
+    return Array.from(job.subOperations.values()).some(subOp => subOp.state === 'queued');
   }
 
   private emitJobStateChange(jobId: string, oldState: JobReadinessState, newState: JobReadinessState): void {
@@ -394,14 +452,17 @@ export class JobStateManager {
   /**
    * Mark job as started (moved to active)
    */
-  markJobStarted(jobId: string): void {
+  markJobStarted(jobId: string, suppressEvent: boolean = false): void {
     const jobState = this.jobStates.get(jobId);
     if (jobState && jobState.state === JobReadinessState.READY_TO_START) {
       jobState.state = JobReadinessState.IN_PROGRESS;
       this.activeJobs.set(jobId, jobState.job);
       
-      const eventEmitter = EventUtils.createJobEventEmitter(jobId, jobState.job.facilityId);
-      eventEmitter.started();
+      // Only emit event if not suppressed (to avoid duplicates from coordinator)
+      if (!suppressEvent) {
+        const eventEmitter = EventUtils.createJobEventEmitter(jobId, jobState.job.facilityId);
+        eventEmitter.started();
+      }
     }
   }
 

@@ -13,6 +13,39 @@ import { EnhancementManager } from '../systems/enhancementManager';
 import { EnhancementCalculator } from '../systems/enhancementCalculator';
 import { globalJobStateManager, JobReadinessState } from '../systems/jobStateManager';
 
+// Job State Debug Panel Component
+function JobStateDebugPanel() {
+  const stats = globalJobStateManager.getStats();
+  
+  return (
+    <div className="terminal-card border-blue-600 mb-4">
+      <div className="text-blue-400 font-mono text-sm mb-2">🔍 JOB STATE MANAGER</div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-xs">
+        <div className="text-center">
+          <div className="text-green-400 text-lg font-bold">{stats.ready}</div>
+          <div className="text-gray-400">READY</div>
+        </div>
+        <div className="text-center">
+          <div className="text-yellow-400 text-lg font-bold">{stats.active}</div>
+          <div className="text-gray-400">ACTIVE</div>
+        </div>
+        <div className="text-center">
+          <div className="text-orange-400 text-lg font-bold">{stats.blocked}</div>
+          <div className="text-gray-400">BLOCKED</div>
+        </div>
+        <div className="text-center">
+          <div className="text-emerald-400 text-lg font-bold">{stats.completed}</div>
+          <div className="text-gray-400">COMPLETED</div>
+        </div>
+        <div className="text-center">
+          <div className="text-teal-400 text-lg font-bold">{stats.total}</div>
+          <div className="text-gray-400">TOTAL</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Helper function to format product names for display
 function formatProductName(productId: string): string {
   return productId
@@ -529,6 +562,57 @@ function UnifiedJobList({ workspace }: UnifiedJobListProps) {
   };
   
   const getJobStatusInfo = (job: MachineSlotJob) => {
+    // Get the enhanced state from job state manager
+    const jobState = globalJobStateManager.getJobState(job.id);
+    
+    if (jobState) {
+      switch (jobState.state) {
+        case JobReadinessState.READY_TO_START:
+          return {
+            statusText: 'READY',
+            statusColor: 'text-green-400',
+            borderColor: 'border-green-600',
+            bgColor: 'bg-green-900'
+          };
+        case JobReadinessState.BLOCKED_BY_DEPENDENCIES:
+          return {
+            statusText: 'BLOCKED (DEPS)',
+            statusColor: 'text-orange-400',
+            borderColor: 'border-orange-600',
+            bgColor: 'bg-orange-900'
+          };
+        case JobReadinessState.BLOCKED_BY_MATERIALS:
+          return {
+            statusText: 'BLOCKED (MATERIALS)',
+            statusColor: 'text-red-400',
+            borderColor: 'border-red-600',
+            bgColor: 'bg-red-900'
+          };
+        case JobReadinessState.BLOCKED_BY_EQUIPMENT:
+          return {
+            statusText: 'BLOCKED (EQUIPMENT)',
+            statusColor: 'text-purple-400',
+            borderColor: 'border-purple-600',
+            bgColor: 'bg-purple-900'
+          };
+        case JobReadinessState.IN_PROGRESS:
+          return {
+            statusText: 'IN PROGRESS',
+            statusColor: 'text-yellow-400',
+            borderColor: 'border-yellow-600',
+            bgColor: 'bg-yellow-900'
+          };
+        case JobReadinessState.COMPLETED:
+          return {
+            statusText: 'COMPLETED',
+            statusColor: 'text-emerald-400',
+            borderColor: 'border-emerald-600',
+            bgColor: 'bg-emerald-900'
+          };
+      }
+    }
+    
+    // Fallback to legacy states
     switch (job.state) {
       case 'queued':
         return {
@@ -1372,12 +1456,15 @@ export function MachineWorkspaceView() {
       {/* Implementation Status Notice */}
       <div className="terminal-card border-green-600 mb-4">
         <div className="text-center">
-          <div className="text-green-400 font-mono text-lg mb-2">✓ MANUFACTURING V1 COMPLETE</div>
+          <div className="text-green-400 font-mono text-lg mb-2">✅ EVENT-DRIVEN ARCHITECTURE ACTIVE</div>
           <div className="text-gray-400 text-sm">
-            Machine workspace system with facility-wide job queues and real-time job notifications fully functional.
+            Jobs are now processed using an event-driven system for optimal performance.
           </div>
         </div>
       </div>
+      
+      {/* Job State Manager Debug Panel */}
+      <JobStateDebugPanel />
       
       {/* Machine cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
