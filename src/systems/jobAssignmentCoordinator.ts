@@ -179,7 +179,9 @@ export class JobAssignmentCoordinator {
           if (usedMachines.has(machineId)) continue;
           
           const compatibility = this.calculateCompatibility(subOp.operation, machineId, facility);
-          console.log(`🔍 COMPATIBILITY: Machine ${machineId} for operation "${subOp.operation.name}" - score: ${compatibility.score}`);
+          const equipment = facility.equipment.find(e => e.id === machineId);
+          const equipmentDef = this.equipmentDefinitions.get(equipment?.equipmentId || '');
+          console.log(`🔍 COMPATIBILITY: Machine ${machineId} (${equipmentDef?.name || 'unknown'}) for operation "${subOp.operation.name}" - score: ${compatibility.score}, duration: ${compatibility.estimatedDuration}`);
           
           if (compatibility.score > 0) {
             candidates.push({
@@ -209,6 +211,13 @@ export class JobAssignmentCoordinator {
       // Then by compatibility score
       return b.compatibilityScore - a.compatibilityScore;
     });
+
+    console.log(`🎯 ASSIGNMENT: Sorted candidates:`, candidates.map(c => ({
+      jobId: c.jobId,
+      machineId: c.machineId,
+      score: c.compatibilityScore,
+      duration: c.estimatedDuration
+    })));
 
     // Assign jobs greedily (first come, first served with priority)
     for (const candidate of candidates) {
@@ -288,7 +297,9 @@ export class JobAssignmentCoordinator {
     // Better equipment gets higher score
     if (typeof compatibleTag.value === 'number' && typeof operation.requiredTag.minimum === 'number') {
       const efficiency = compatibleTag.value / operation.requiredTag.minimum;
-      score += Math.min(100, efficiency * 50); // Bonus for over-qualified equipment
+      const bonus = Math.min(200, efficiency * 10 + Math.log2(efficiency) * 30);
+      score += bonus;
+      console.log(`🔍 COMPAT: Efficiency: ${compatibleTag.value}/${operation.requiredTag.minimum} = ${efficiency.toFixed(2)}, bonus: ${bonus.toFixed(1)}, total score: ${score.toFixed(1)}`);
     }
 
     // Estimate duration based on equipment efficiency

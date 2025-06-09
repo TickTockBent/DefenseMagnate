@@ -303,8 +303,8 @@ export function calculateTaggedQuality(baseQuality: number, tags: ItemTag[]): nu
     quality = Math.min(quality, qualityCap);
   }
   
-  // Ensure quality stays within valid range
-  return Math.max(0, Math.min(100, quality));
+  // Ensure quality stays within valid range and round to whole number
+  return Math.round(Math.max(0, Math.min(100, quality)));
 }
 
 export function calculateTaggedValue(baseValue: number, quality: number, tags: ItemTag[]): number {

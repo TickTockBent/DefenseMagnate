@@ -103,7 +103,7 @@ export function createGarage(name: string): Facility {
     
     production_lines: 1,
     max_item_size: 'small',
-    storage_capacity: 100,
+    storage_capacity: 1000,
     floor_space: 50,
     used_floor_space: 0,
     

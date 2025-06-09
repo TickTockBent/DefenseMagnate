@@ -285,7 +285,7 @@ export const useGameStore = create<GameState>((set, get) => ({
               const deliveredItem = createItemInstance({
                 baseItemId: order.materialId,
                 tags: [ItemTag.STANDARD], // Default to standard quality for market purchases
-                quality: 80 + Math.random() * 15, // 80-95% quality for market materials
+                quality: Math.round(80 + Math.random() * 15), // 80-95% quality for market materials (whole numbers)
                 quantity: order.quantity,
                 metadata: { 
                   source: 'market_delivery',
@@ -1231,6 +1231,13 @@ initialFacility.inventory = facilityMigrationManager.migrateFacility({
   ...initialFacility,
   current_storage: initialMaterials
 }).inventory;
+
+// Ensure adequate storage capacity for manufacturing operations
+if (initialFacility.inventory && initialFacility.inventory.storageCapacity < 1000) {
+  console.log(`Upgrading facility storage capacity from ${initialFacility.inventory.storageCapacity} to 1000`);
+  initialFacility.inventory.storageCapacity = 1000;
+  initialFacility.storage_capacity = 1000; // Keep both properties in sync
+}
 
 // Initialize the machine workspace for the facility
 const machineManager = new MachineWorkspaceManager(equipmentDatabase);

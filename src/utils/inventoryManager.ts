@@ -43,23 +43,38 @@ export class InventoryManager {
   
   // Add item to inventory
   addItem(inventory: FacilityInventory, item: ItemInstance): boolean {
-    const baseItem = getBaseItem(item.baseItemId);
-    if (!baseItem) {
-      console.error(`Invalid base item ID: ${item.baseItemId}`);
-      return false;
-    }
-    
-    // Check capacity
-    if (inventory.usedCapacity + item.quantity > inventory.storageCapacity) {
-      console.warn('Insufficient storage capacity');
-      return false;
-    }
-    
-    const group = inventory.groups.get(baseItem.category);
-    if (!group) {
-      console.error(`No group found for category: ${baseItem.category}`);
-      return false;
-    }
+    try {
+      const baseItem = getBaseItem(item.baseItemId);
+      if (!baseItem) {
+        console.error(`Invalid base item ID: ${item.baseItemId}`);
+        return false;
+      }
+      
+      // Check capacity
+      if (inventory.usedCapacity + item.quantity > inventory.storageCapacity) {
+        console.warn(`⚠️ INSUFFICIENT STORAGE: Cannot add ${item.quantity}x ${item.baseItemId}. Used: ${inventory.usedCapacity}/${inventory.storageCapacity}, would become: ${inventory.usedCapacity + item.quantity}/${inventory.storageCapacity}`);
+        return false;
+      }
+      
+      const group = inventory.groups.get(baseItem.category);
+      if (!group) {
+        console.error(`No group found for category: ${baseItem.category}`);
+        return false;
+      }
+      
+      // Validate item properties
+      if (typeof item.quality !== 'number' || isNaN(item.quality)) {
+        console.error(`Invalid quality value: ${item.quality} (type: ${typeof item.quality})`);
+        return false;
+      }
+      if (typeof item.quantity !== 'number' || isNaN(item.quantity) || item.quantity <= 0) {
+        console.error(`Invalid quantity value: ${item.quantity} (type: ${typeof item.quantity})`);
+        return false;
+      }
+      if (!Array.isArray(item.tags)) {
+        console.error(`Invalid tags value: ${item.tags} (type: ${typeof item.tags})`);
+        return false;
+      }
     
     // Find existing slot for this base item
     let slot = group.slots.find(s => s.baseItemId === item.baseItemId);
@@ -96,6 +111,10 @@ export class InventoryManager {
     
     inventory.lastUpdated = Date.now();
     return true;
+    } catch (error) {
+      console.error(`ERROR: Failed to add ${item.baseItemId} to inventory:`, error);
+      return false;
+    }
   }
   
   // Remove item from inventory

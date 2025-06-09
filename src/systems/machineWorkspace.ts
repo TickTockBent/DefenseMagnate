@@ -943,7 +943,16 @@ export class MachineWorkspaceManager {
       // Find matching tag for efficiency calculation
       const matchingTag = equipmentDef.tags.find(tag => tag.category === subOp.operation.requiredTag.category);
       if (matchingTag && typeof matchingTag.value === 'number') {
-        durationMultiplier = Math.max(0.5, 100 / matchingTag.value); // Better equipment = faster work
+        // Check the unit to determine how to calculate efficiency
+        if (matchingTag.unit === '%') {
+          // Percentage-based efficiency (e.g., 85% efficiency)
+          durationMultiplier = Math.max(0.5, 100 / matchingTag.value);
+        } else {
+          // Level-based capability (e.g., level 1, level 5)
+          // Higher levels are better, but don't dramatically reduce time
+          // Level 1 = 1.0x time, Level 2 = 0.9x time, Level 5 = 0.6x time
+          durationMultiplier = Math.max(0.5, 1.0 / Math.sqrt(matchingTag.value));
+        }
       }
     }
     
@@ -1422,7 +1431,7 @@ export class MachineWorkspaceManager {
       // For extraction, preserve roughly 80% of original quality with some variation
       const baseQuality = 25; // Low quality for damaged items being disassembled
       const qualityVariation = (Math.random() - 0.5) * 20; // ±10% variation
-      const componentQuality = Math.max(5, Math.min(95, baseQuality + qualityVariation));
+      const componentQuality = Math.round(Math.max(5, Math.min(95, baseQuality + qualityVariation)));
       
       // Determine component condition tags
       const componentTags: import('../types').ItemTag[] = [];
@@ -1742,18 +1751,50 @@ export class MachineWorkspaceManager {
       return;
     }
     
-    // Move all items from job inventory to facility inventory
+    console.log(`Finalizing job ${job.id} - moving items from job inventory to facility`);
+    
+    // Collect all items to move (create copies before removing from job inventory)
+    const itemsToMove: ItemInstance[] = [];
     for (const group of job.jobInventory.groups.values()) {
       for (const slot of group.slots) {
         for (const instance of slot.stack.instances) {
-          // Remove from job inventory
-          inventoryManager.removeItem(job.jobInventory, instance.id, instance.quantity);
-          // Add to facility inventory
-          inventoryManager.addItem(facility.inventory, instance);
+          // Create a copy of the item instance
+          const itemCopy: ItemInstance = {
+            id: instance.id,
+            baseItemId: instance.baseItemId,
+            quantity: instance.quantity,
+            quality: instance.quality,
+            tags: [...instance.tags],
+            acquiredAt: instance.acquiredAt,
+            lastModified: Date.now(),
+            metadata: instance.metadata ? { ...instance.metadata } : undefined
+          };
+          itemsToMove.push(itemCopy);
+          console.log(`Will move ${itemCopy.quantity}x ${itemCopy.baseItemId} (quality: ${itemCopy.quality}%) to facility`);
         }
       }
     }
     
-    console.log(`Job ${job.id} finalized - all items moved to facility inventory`);
+    // Remove all items from job inventory
+    for (const item of itemsToMove) {
+      inventoryManager.removeItem(job.jobInventory, item.id, item.quantity);
+    }
+    
+    // Add all items to facility inventory
+    let successfulMoves = 0;
+    for (const item of itemsToMove) {
+      // Debug: Check if base item exists
+      const baseItem = getBaseItem(item.baseItemId);
+      
+      const success = inventoryManager.addItem(facility.inventory, item);
+      if (success) {
+        successfulMoves++;
+        console.log(`Successfully moved ${item.quantity}x ${item.baseItemId} to facility inventory`);
+      } else {
+        console.error(`Failed to move ${item.quantity}x ${item.baseItemId} to facility inventory - baseItem: ${!!baseItem}`);
+      }
+    }
+    
+    console.log(`Job ${job.id} finalized - ${successfulMoves}/${itemsToMove.length} items successfully moved to facility inventory`);
   }
 }

@@ -397,6 +397,14 @@ export class AutomaticWorkflowGeneration {
       }
     }
     
+    // Create a synthetic item for assessment with reasonable base quality
+    // Even damaged items have some salvageable components
+    const assessmentBaseQuality = Math.max(20, item.quality || 20); // Minimum 20% for assessment
+    const syntheticItemForAssessment = {
+      ...item,
+      quality: assessmentBaseQuality
+    };
+    
     return {
       id: `assess_components_${Date.now()}`,
       name: 'Component Assessment',
@@ -409,7 +417,7 @@ export class AutomaticWorkflowGeneration {
       baseDurationMinutes: 15 * item.quantity, // More thorough than simple analysis
       // Assessment consumes extracted components and produces assessed components
       materialConsumption: materialConsumption,
-      materialProduction: this.generateDiscoveredComponents(item, baseItem, 0.8),
+      materialProduction: this.generateDiscoveredComponents(syntheticItemForAssessment, baseItem, 0.8),
       can_fail: false,
       failure_chance: 0,
       labor_skill: 'skilled_technician',
@@ -743,7 +751,9 @@ export class AutomaticWorkflowGeneration {
       
       for (const component of baseItem.assemblyComponents) {
         // Simulate discovery: add randomness to represent uncertainty in component condition
-        const baseQuality = item.quality * discoveryAccuracy;
+        // Ensure input quality is on 0-100 scale (not 0-1)
+        const inputQuality = item.quality > 1 ? item.quality : item.quality * 100;
+        const baseQuality = inputQuality * discoveryAccuracy;
         const uncertainty = 20; // ±20% uncertainty in condition assessment
         const qualityVariation = (Math.random() - 0.5) * uncertainty;
         let componentQuality = Math.round(Math.max(5, Math.min(95, baseQuality + qualityVariation)));
